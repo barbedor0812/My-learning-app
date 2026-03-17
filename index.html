@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CPA学习助手（原型）</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <meta name="theme-color" content="#19a974" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar__title">CPA学习助手</div>
+      <div class="topbar__actions">
+        <span id="cloudStatus" class="pill">云端：未连接</span>
+        <button id="btnOpenAccount" class="btn btn--ghost" type="button">账号</button>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="主导航">
+      <button class="tab is-active" data-route="today" type="button">今日任务</button>
+      <button class="tab" data-route="notes" type="button">笔记</button>
+      <button class="tab" data-route="plan" type="button">学习计划</button>
+      <button class="tab" data-route="stats" type="button">统计</button>
+    </nav>
+
+    <main class="container">
+      <section id="accountPanel" class="card authPanel hidden">
+        <div class="row row--between row--wrap gap8">
+          <div>
+            <div class="card__title">账号 / 云端同步（Supabase）</div>
+            <div id="accountHint" class="muted mt6">未登录：登录后数据会自动同步到云端，不同设备同账号数据一致。</div>
+          </div>
+          <button id="btnCloseAccount" class="btn btn--danger" type="button">关闭</button>
+        </div>
+        <div class="grid grid--2 mt12">
+          <div class="card" style="box-shadow:none;">
+            <div class="card__title">登录 / 注册</div>
+            <label class="label mt12">邮箱</label>
+            <input id="authEmail" class="input" placeholder="you@example.com" />
+            <label class="label mt12">密码</label>
+            <input id="authPassword" class="input" type="password" placeholder="至少 6 位" />
+            <div class="row row--wrap gap8 mt12">
+              <button id="btnSignIn" class="btn btn--primary" type="button">登录</button>
+              <button id="btnSignUp" class="btn btn--ghost" type="button">注册</button>
+              <button id="btnSignOut" class="btn btn--danger hidden" type="button">退出登录</button>
+            </div>
+            <div id="authMsg" class="muted mt8"></div>
+            <div class="divider"></div>
+            <div class="card__title mt12">数据备份（本地）</div>
+            <div class="row row--wrap gap8 mt8">
+              <button id="btnExport" class="btn btn--ghost" type="button">导出 JSON</button>
+              <label class="btn btn--ghost" for="importJson">导入 JSON</label>
+              <input id="importJson" type="file" accept="application/json" hidden />
+            </div>
+          </div>
+
+        </div>
+      </section>
+      <section id="viewToday" class="view is-active" data-view="today">
+        <div class="card">
+          <div class="card__title">今日提示</div>
+          <div id="todayHint" class="muted">加载中…</div>
+        </div>
+
+        <div class="grid grid--2">
+          <div class="card">
+            <div class="card__title">今日新学</div>
+            <div class="row row--between">
+              <div id="todayStudyTarget" class="big">—</div>
+              <div class="row gap8">
+                <span id="studyTimerDisplay" class="pill hidden">00:00:00</span>
+                <button id="btnStartStudyTimer" class="btn" type="button">开始计时</button>
+              </div>
+            </div>
+            <div class="divider"></div>
+            <div id="todayStudyList" class="list"></div>
+          </div>
+
+          <div class="card">
+            <div class="card__title">待复习</div>
+            <div id="todayReviewList" class="list"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card__title">快速记录今日状态</div>
+          <div class="segmented">
+            <button class="segmented__btn" data-mood="good" type="button">状态很好</button>
+            <button class="segmented__btn" data-mood="ok" type="button">一般般</button>
+            <button class="segmented__btn" data-mood="hard" type="button">有点难</button>
+          </div>
+          <div id="todayMoodSaved" class="muted mt8"></div>
+        </div>
+
+        <div class="card mt12">
+          <div class="card__title">今日打卡任务（手动输入）</div>
+          <div class="row row--between row--wrap gap8 mt12">
+            <input id="dailyTaskInput" class="input" placeholder="输入今天想完成的任务，如：完成第3章讲义精读" />
+            <button id="btnAddDailyTask" class="btn" type="button">添加</button>
+          </div>
+          <div id="dailyTasksList" class="list mt12"></div>
+          <div class="muted mt8">说明：每一天都可新增任务；状态可选：完成 / 半完成 / 未开始。</div>
+        </div>
+      </section>
+
+      <section id="viewNotes" class="view" data-view="notes">
+        <div class="grid grid--2">
+          <div class="card">
+            <div class="card__title">创建笔记</div>
+
+            <div class="row row--wrap gap8">
+              <button id="btnNewNote" class="btn" type="button">手动新建</button>
+              <label class="btn btn--ghost" for="pdfInput">导入PDF</label>
+              <input id="pdfInput" type="file" accept="application/pdf" hidden />
+            </div>
+
+            <div id="pdfImportStatus" class="muted mt8"></div>
+            <div id="pdfSplitPanel" class="mt12 hidden">
+              <div class="pill">笔记拆分界面（原型）</div>
+              <div class="grid grid--2 mt8">
+                <div>
+                  <div class="muted mb6">左侧：PDF预览（首屏）</div>
+                  <canvas id="pdfCanvas" class="pdfCanvas" aria-label="PDF预览"></canvas>
+                </div>
+                <div>
+                  <div class="muted mb6">
+                    右侧：提取文本（用 <code>---</code> 分割为多条笔记）
+                  </div>
+                  <textarea id="pdfExtractedText" class="textarea textarea--mono" rows="14"></textarea>
+                  <div class="divider"></div>
+                  <div class="row row--between row--wrap gap8">
+                    <div class="muted">归类规则（可选）：按页码范围放入文件夹</div>
+                    <button id="btnAddPdfRule" class="btn btn--ghost" type="button">+ 新增规则</button>
+                  </div>
+                  <div id="pdfRulesForm" class="pdfRules mt8"></div>
+                  <div class="muted mt8">
+                    提示：页码按 <code># 第N页</code> 识别（导入时会自动加）。未命中规则的内容将进入「未分类」。
+                  </div>
+                  <div class="row row--between mt8">
+                    <div class="muted">提示：你可以手动调整分割线位置</div>
+                    <button id="btnCreateNotesFromPdf" class="btn" type="button">确认拆分并创建</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card__title">我的笔记</div>
+            <div class="row row--between row--wrap gap8 mt8">
+              <div class="row row--wrap gap8">
+                <span class="pill">文件夹</span>
+                <button id="btnAddFolder" class="btn btn--ghost" type="button">新建</button>
+                <button id="btnDeleteFolder" class="btn btn--danger" type="button">删除当前</button>
+              </div>
+              <div id="activeFolderPill" class="pill">全部</div>
+            </div>
+            <div id="foldersTree" class="tree mt8"></div>
+            <div class="row row--between">
+              <input id="notesSearch" class="input" placeholder="搜索标题/标签/正文…" />
+              <select id="notesFilter" class="select" aria-label="笔记筛选">
+                <option value="all">全部</option>
+                <option value="due">今日需复习</option>
+                <option value="learned">已学</option>
+                <option value="unlearned">未学</option>
+              </select>
+            </div>
+            <div class="row row--between row--wrap gap8 mt8">
+              <button id="btnToggleSelectNotes" class="btn btn--ghost" type="button">选择</button>
+              <div id="notesBulkActions" class="row row--wrap gap8 hidden">
+                <span id="notesSelectedCount" class="pill">已选 0</span>
+                <button id="btnSelectAllNotes" class="btn btn--ghost" type="button">全选</button>
+                <button id="btnClearSelectedNotes" class="btn btn--ghost" type="button">清空</button>
+                <button id="btnDeleteSelectedNotes" class="btn btn--danger" type="button">删除</button>
+                <select id="notesBulkMoveSelect" class="select" aria-label="移动到文件夹"></select>
+                <button id="btnBulkMoveNotes" class="btn" type="button">移动</button>
+              </div>
+            </div>
+            <div id="notesList" class="list mt12"></div>
+          </div>
+        </div>
+
+        <div id="noteEditor" class="card mt12 hidden">
+          <div class="editor-header">
+            <div class="editor-header__left">
+              <div class="card__title">笔记编辑</div>
+              <select id="noteFolderSelect" class="select select--small" aria-label="所属文件夹"></select>
+              <button id="btnEditorToggleTodayTarget" class="btn btn--ghost btn--small" type="button">加入今日新学</button>
+            </div>
+            <div class="editor-header__right">
+              <button id="btnCloseEditor" class="btn btn--danger btn--small" type="button">关闭</button>
+            </div>
+          </div>
+
+          <div class="grid grid--2 mt12">
+            <div>
+              <label class="label">标题</label>
+              <input id="noteTitle" class="input" />
+
+              <label class="label mt12">知识点标签（逗号分隔）</label>
+              <div id="tagsEditor" class="tagsEditor mt8"></div>
+              <div class="row row--wrap gap8 mt8">
+                <input id="tagInput" class="input" placeholder="输入标签后回车添加（支持逗号）" />
+                <button id="btnAddTag" class="btn btn--ghost" type="button">添加标签</button>
+              </div>
+              <input id="noteTags" class="input hidden" />
+
+              <div class="row row--between mt12">
+                <label class="label">正文（支持 Markdown，挖空语法：<code>{{答案}}</code>）</label>
+              </div>
+              <div class="editor-toolbar mt8">
+                <div class="btn-group">
+                  <button id="btnSmartCloze" class="btn btn--ghost btn--small" type="button" title="智能挖空">智能挖空</button>
+                  <button id="btnClozeSelection" class="btn btn--ghost btn--small" type="button" title="挖空所选">挖空所选</button>
+                  <button id="btnToggleClozeHighlight" class="btn btn--ghost btn--small" type="button" title="切换挖空高亮">挖空高亮</button>
+                </div>
+                <div class="btn-group">
+                  <button id="btnMarkLearned" class="btn btn--ghost btn--small" type="button">标记已学</button>
+                  <button id="btnOpenReview" class="btn btn--small" type="button">复习</button>
+                </div>
+                <div class="btn-group">
+                  <button id="btnSaveNote" class="btn btn--primary btn--small" type="button">保存</button>
+                </div>
+              </div>
+              <textarea id="noteBody" class="textarea textarea--mono mt8" rows="14"></textarea>
+              <div id="noteSavedHint" class="muted mt8"></div>
+            </div>
+            <div>
+              <div class="row row--between">
+                <div class="label">预览</div>
+                <div class="pill" id="noteMetaPill">—</div>
+              </div>
+              <div id="notePreview" class="preview mt8"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="noteReview" class="card mt12 hidden">
+          <div class="row row--between row--wrap gap8">
+            <div class="card__title">复习笔记（填空练习）</div>
+            <div class="row gap8">
+              <button id="btnCheckAnswers" class="btn" type="button">核对答案</button>
+              <button id="btnResetAnswers" class="btn btn--ghost" type="button">重新填空</button>
+              <button id="btnFinishReview" class="btn btn--ghost" type="button">完成复习</button>
+              <button id="btnCloseReview" class="btn btn--danger" type="button">关闭</button>
+            </div>
+          </div>
+          <div id="reviewTitle" class="big mt8"></div>
+          <div id="reviewBody" class="review mt12"></div>
+          <div id="reviewResultHint" class="muted mt8"></div>
+        </div>
+      </section>
+
+      <section id="viewPlan" class="view" data-view="plan">
+        <div class="card">
+          <div class="row row--between row--wrap gap8">
+            <div class="card__title">学习计划（多科目）</div>
+            <div class="row row--wrap gap8">
+              <button id="btnAddPlanSubject" class="btn btn--ghost" type="button">+ 新科目</button>
+              <button id="btnRenamePlanSubject" class="btn btn--ghost" type="button">重命名</button>
+              <button id="btnDeletePlanSubject" class="btn btn--danger" type="button">删除科目</button>
+            </div>
+          </div>
+
+          <div id="planTabs" class="tabs mt8" aria-label="科目页签"></div>
+          <div id="planSubjectHint" class="muted mt8"></div>
+
+          <div class="grid grid--2 mt12">
+            <div>
+              <label class="label">科目/课程</label>
+              <input id="planSubject" class="input" placeholder="例如：会计" />
+            </div>
+            <div>
+              <label class="label">总学时（小时）</label>
+              <input id="planTotalHours" class="input" type="number" min="0" step="0.5" placeholder="120" />
+            </div>
+            <div>
+              <label class="label">计划完成日期</label>
+              <input id="planDueDate" class="input" type="date" />
+            </div>
+            <div>
+              <label class="label">常规每日可用时间（小时）</label>
+              <input id="planDailyHours" class="input" type="number" min="0" step="0.25" placeholder="2" />
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="row row--between row--wrap gap8">
+            <div>
+              <div class="label">月度特殊时段（周期性规则）</div>
+              <div class="muted">例：每月 26-31 日可用 0.5 小时</div>
+            </div>
+            <button id="btnAddSpecialRule" class="btn btn--ghost" type="button">新增特殊日期</button>
+          </div>
+          <div id="specialRules" class="mt12"></div>
+
+          <div class="row row--between mt12">
+            <button id="btnGeneratePlan" class="btn" type="button">生成计划</button>
+            <div id="planSavedHint" class="muted"></div>
+          </div>
+        </div>
+
+        <div class="card mt12">
+          <div class="card__title">计划预览（按比例分配）</div>
+          <div id="planPreview" class="list mt12"></div>
+        </div>
+      </section>
+
+      <section id="viewStats" class="view" data-view="stats">
+        <div class="grid grid--2">
+          <div class="card">
+            <div class="card__title">学习进度概览</div>
+            <div id="todayTaskStatsOverview"></div>
+            <div class="mt12">
+              <div class="label">学时进度</div>
+              <div class="progress">
+                <div id="progressHoursBar" class="progress__bar"></div>
+              </div>
+              <div id="progressHoursText" class="muted mt6">—</div>
+            </div>
+            <div class="mt12">
+              <div class="label">笔记进度</div>
+              <div class="progress">
+                <div id="progressNotesBar" class="progress__bar"></div>
+              </div>
+              <div id="progressNotesText" class="muted mt6">—</div>
+            </div>
+            <div class="mt12">
+              <div class="label">连续学习天数</div>
+              <div id="streakText" class="big">—</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card__title">未来 7 天游览（复习分布）</div>
+            <div id="reviewDistribution" class="list mt12"></div>
+          </div>
+        </div>
+
+        <div class="card mt12">
+          <div class="card__title">最近 7 天打卡任务汇总</div>
+          <div id="dailyTasksSummary" class="list mt12"></div>
+        </div>
+
+        <div class="card mt12">
+          <div class="row row--between row--wrap gap8">
+            <div class="card__title">学习日历（简化版）</div>
+            <div class="row row--wrap gap8">
+              <button id="btnCalendarPrev" class="btn btn--ghost" type="button">上个月</button>
+              <span id="calendarMonthLabel" class="pill">—</span>
+              <button id="btnCalendarNext" class="btn btn--ghost" type="button">下个月</button>
+            </div>
+          </div>
+          <div id="calendar" class="calendar mt12"></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="muted">
+        原型说明：数据存本机浏览器（localStorage），用于快速验证交互与算法。
+      </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Local PDF.js so it works even without internet / with file:// -->
+    <script src="./pdf.min.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
