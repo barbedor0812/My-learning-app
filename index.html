@@ -3,14 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CPA学习助手（原型）</title>
+    <title>学习助手（原型）</title>
     <link rel="manifest" href="./manifest.webmanifest" />
-    <meta name="theme-color" content="#19a974" />
+    <meta name="theme-color" content="#0071e3" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <header class="topbar">
-      <div class="topbar__title">CPA学习助手</div>
+      <div class="topbar__title">学习助手</div>
       <div class="topbar__actions">
         <span id="cloudStatus" class="pill">云端：未连接</span>
         <button id="btnOpenAccount" class="btn btn--ghost" type="button">账号</button>
@@ -193,45 +193,53 @@
             </div>
           </div>
 
-          <div class="grid grid--2 mt12">
-            <div>
-              <label class="label">标题</label>
-              <input id="noteTitle" class="input" />
-
-              <label class="label mt12">知识点标签（逗号分隔）</label>
-              <div id="tagsEditor" class="tagsEditor mt8"></div>
+          <div class="editor-main mt12">
+            <div class="editor-inputs">
+              <div class="row gap12">
+                <div style="flex: 2;">
+                  <label class="label">标题</label>
+                  <input id="noteTitle" class="input input--small" />
+                </div>
+                <div style="flex: 1;">
+                  <label class="label">标签</label>
+                  <input id="noteTags" class="input input--small hidden" />
+                  <div id="tagsEditor" class="tagsEditor tagsEditor--compact"></div>
+                </div>
+              </div>
+              
               <div class="row row--wrap gap8 mt8">
-                <input id="tagInput" class="input" placeholder="输入标签后回车添加（支持逗号）" />
-                <button id="btnAddTag" class="btn btn--ghost" type="button">添加标签</button>
+                <input id="tagInput" class="input input--small" style="width: auto; flex-grow: 1;" placeholder="添加标签..." />
+                <button id="btnAddTag" class="btn btn--ghost btn--small" type="button">添加</button>
               </div>
-              <input id="noteTags" class="input hidden" />
 
-              <div class="row row--between mt12">
-                <label class="label">正文（支持 Markdown，挖空语法：<code>{{答案}}</code>）</label>
-              </div>
-              <div class="editor-toolbar mt8">
-                <div class="btn-group">
-                  <button id="btnSmartCloze" class="btn btn--ghost btn--small" type="button" title="智能挖空">智能挖空</button>
-                  <button id="btnClozeSelection" class="btn btn--ghost btn--small" type="button" title="挖空所选">挖空所选</button>
-                  <button id="btnToggleClozeHighlight" class="btn btn--ghost btn--small" type="button" title="切换挖空高亮">挖空高亮</button>
+              <div class="editor-body-grid mt12">
+                <div class="editor-pane">
+                  <div class="row row--between mb6">
+                    <label class="label">正文</label>
+                  </div>
+                  <div class="editor-toolbar">
+                    <div class="btn-group">
+                      <button id="btnSmartCloze" class="btn btn--ghost btn--small" type="button" title="智能挖空">智能</button>
+                      <button id="btnUndoSmartCloze" class="btn btn--ghost btn--small hidden" type="button" title="取消智能挖空">撤销智能</button>
+                      <button id="btnClozeSelection" class="btn btn--ghost btn--small" type="button" title="挖空所选">挖空</button>
+                    </div>
+                    <div class="btn-group">
+                      <button id="btnMarkLearned" class="btn btn--ghost btn--small" type="button">已学</button>
+                      <button id="btnOpenReview" class="btn btn--small" type="button">复习</button>
+                    </div>
+                  </div>
+                  <textarea id="noteBody" class="textarea textarea--mono mt8" rows="12"></textarea>
+                  <div id="noteSavedHint" class="muted mt8"></div>
                 </div>
-                <div class="btn-group">
-                  <button id="btnMarkLearned" class="btn btn--ghost btn--small" type="button">标记已学</button>
-                  <button id="btnOpenReview" class="btn btn--small" type="button">复习</button>
-                </div>
-                <div class="btn-group">
-                  <button id="btnSaveNote" class="btn btn--primary btn--small" type="button">保存</button>
+
+                <div class="preview-pane">
+                  <div class="row row--between mb6">
+                    <div class="label">预览</div>
+                    <div class="pill" id="noteMetaPill">—</div>
+                  </div>
+                  <div id="notePreview" class="preview"></div>
                 </div>
               </div>
-              <textarea id="noteBody" class="textarea textarea--mono mt8" rows="14"></textarea>
-              <div id="noteSavedHint" class="muted mt8"></div>
-            </div>
-            <div>
-              <div class="row row--between">
-                <div class="label">预览</div>
-                <div class="pill" id="noteMetaPill">—</div>
-              </div>
-              <div id="notePreview" class="preview mt8"></div>
             </div>
           </div>
         </div>

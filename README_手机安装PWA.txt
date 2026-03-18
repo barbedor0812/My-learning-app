@@ -1,4 +1,4 @@
-CPA学习助手（手机App版）——PWA 安装说明
+学习助手（手机App版）——PWA 安装说明
 
 你现在这套是“可安装网页应用（PWA）”，优点：
 - 不需要上架商店，也不需要打包 APK/IPA
@@ -12,14 +12,14 @@ CPA学习助手（手机App版）——PWA 安装说明
 
 方案 A：如果你电脑装了 Python
 1）打开 PowerShell，进入目录：
-   cd /d d:\CPA学习助手
+   cd /d d:\学习助手
 2）启动服务：
    python -m http.server 5173
 3）看到提示后不要关闭窗口
 
 方案 B：如果你装了 Node（可选）
 1）npm i -g http-server
-2）cd /d d:\CPA学习助手
+2）cd /d d:\学习助手
 3）http-server -p 5173
 
 --------------------------------------------

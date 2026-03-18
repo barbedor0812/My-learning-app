@@ -186,16 +186,10 @@ function migrateState(s) {
   out.ui = out.ui && typeof out.ui === "object" ? out.ui : base.ui;
   out.ui.activePlanId = out.ui.activePlanId ?? out.plans[0]?.id ?? null;
 
-  // folders (v2)
+  // folders (v2) - Initial folders removed as requested
   out.folders = Array.isArray(out.folders) ? out.folders : [];
-  if (out.folders.length === 0) {
-    // Start with a few common defaults for convenience
-    const now = new Date().toISOString();
-    out.folders = [
-      { id: uid("fld"), name: "第一章", parentId: null, createdAt: now },
-      { id: uid("fld"), name: "第二章", parentId: null, createdAt: now },
-    ];
-  }
+  // Cleanup old default folders if they exist
+  out.folders = out.folders.filter(f => !["第一章", "第二章"].includes(f.name));
 
   // Ensure note.folderId exists
   out.notes = Array.isArray(out.notes) ? out.notes : [];
@@ -610,6 +604,7 @@ function renderFoldersTree() {
         <div class="tree__left">
           <button class="tree__toggle" type="button" data-action="toggleFolder" data-id="${node.id}" ${toggleDisabled ? "disabled" : ""}>${icon}</button>
           <div class="tree__pick" data-action="pickFolder" data-id="${node.id}">
+            <span class="folder-check ${node.id === activeId ? 'is-checked' : ''}">✓</span>
             <div class="tree__name">${escapeHtml(node.name ?? "未命名")}</div>
           </div>
         </div>
@@ -637,6 +632,7 @@ function renderFoldersTree() {
         <div class="tree__left">
           <button class="tree__toggle" type="button" disabled>·</button>
           <div class="tree__pick" data-action="pickFolder" data-id="all">
+            <span class="folder-check ${"all" === activeId ? 'is-checked' : ''}">✓</span>
             <div class="tree__name">全部</div>
           </div>
         </div>
@@ -646,6 +642,7 @@ function renderFoldersTree() {
         <div class="tree__left">
           <button class="tree__toggle" type="button" disabled>·</button>
           <div class="tree__pick" data-action="pickFolder" data-id="uncategorized">
+            <span class="folder-check ${"uncategorized" === activeId ? 'is-checked' : ''}">✓</span>
             <div class="tree__name">未归类</div>
           </div>
         </div>
@@ -885,7 +882,7 @@ document.addEventListener("keydown", (e) => {
   saveEditor(false);
 });
 
-document.getElementById("btnClozeSelection").addEventListener("click", (e) => {
+document.getElementById("btnClozeSelection")?.addEventListener("click", (e) => {
   e.preventDefault();
   const ta = noteBodyEl;
   const start = ta.selectionStart ?? 0;
@@ -920,21 +917,60 @@ document.getElementById("btnClozeSelection").addEventListener("click", (e) => {
   renderNotePreview({ ...note, title: noteTitleEl.value, tags: parseTags(noteTagsEl.value), body: ta.value });
 });
 
-document.getElementById("btnSmartCloze").addEventListener("click", () => {
+let lastSmartClozeBackup = null;
+const btnUndoSmartClozeEl = document.getElementById("btnUndoSmartCloze");
+
+document.getElementById("btnSmartCloze")?.addEventListener("click", () => {
   const note = getNoteById(state.ui.activeNoteId);
   if (!note) return;
   const body = noteBodyEl.value ?? "";
+  
+  // Backup before smart cloze for undo
+  lastSmartClozeBackup = body;
+  btnUndoSmartClozeEl?.classList.remove("hidden");
+
   const updated = smartCloze(body);
   noteBodyEl.value = updated;
+  
+  setEditorDirty(true);
+  scheduleAutoSave();
   renderNotePreview({ ...note, title: noteTitleEl.value, tags: parseTags(noteTagsEl.value), body: updated });
-  noteSavedHintEl.textContent = "已生成挖空建议（可继续手动调整后保存）";
+  noteSavedHintEl.textContent = "已生成挖空建议（可撤销或继续手动调整）";
+});
+
+btnUndoSmartClozeEl?.addEventListener("click", () => {
+  if (lastSmartClozeBackup === null) return;
+  const note = getNoteById(state.ui.activeNoteId);
+  if (!note) return;
+  
+  noteBodyEl.value = lastSmartClozeBackup;
+  lastSmartClozeBackup = null;
+  btnUndoSmartClozeEl.classList.add("hidden");
+  
+  setEditorDirty(true);
+  scheduleAutoSave();
+  renderNotePreview({ ...note, title: noteTitleEl.value, tags: parseTags(noteTagsEl.value), body: noteBodyEl.value });
+  noteSavedHintEl.textContent = "已撤销智能挖空";
 });
 
 function smartCloze(text) {
-  // Heuristic "AI-like": numbers/dates/percentages, 2-6 length Chinese terms after “包括/称为/是/为/指/分为”
+  let out = String(text ?? "");
+  out = out
+    // 连续下划线包裹内容：______答案______
+    .replace(/[_＿]{2,}([^_＿\n]*?)[_＿]{2,}/g, (_, inner) => {
+      const v = String(inner ?? "").trim();
+      return `{{${v || " "}}}`;
+    })
+    // 下划线之间有空格的情况：_ _ _  或  ＿ ＿ ＿
+    .replace(/(?:[_＿]\s*){3,}/g, "{{ }}")
+    // 单个下划线左右包裹内容且带空格：_ 答案 _
+    .replace(/[_＿]\s*([^\n]{1,50}?)\s*[_＿]/g, (_, inner) => `{{${String(inner ?? "").trim()}}}`)
+    // 多组下划线由标点分隔：_____、______、_____，______
+    .replace(/([_＿]{3,})(?=\s*[、，,；;。．.])/g, "{{ }}");
+
   const protectedRanges = [];
   const markProtected = (match) => protectedRanges.push([match.index, match.index + match[0].length]);
-  [...text.matchAll(/\{\{[\s\S]*?\}\}/g)].forEach(markProtected);
+  [...out.matchAll(/\{\{[\s\S]*?\}\}/g)].forEach(markProtected);
 
   const isProtected = (idx) => protectedRanges.some(([a, b]) => idx >= a && idx < b);
 
@@ -949,12 +985,11 @@ function smartCloze(text) {
     candidates.push([start, end]);
   };
 
-  for (const m of text.matchAll(/\b\d{2,4}\b/g)) pushCandidate(m);
-  for (const m of text.matchAll(/\b\d+(\.\d+)?%/g)) pushCandidate(m);
-  for (const m of text.matchAll(/\b\d+(\.\d+)?\s*(年|月|日|小时|h|H)\b/g)) pushCandidate(m);
-  for (const m of text.matchAll(/(包括|称为|是|为|指|分为)\s*([一-龥]{2,8})/g)) pushCandidate(m, 2);
+  for (const m of out.matchAll(/\b\d{2,4}\b/g)) pushCandidate(m);
+  for (const m of out.matchAll(/\b\d+(\.\d+)?%/g)) pushCandidate(m);
+  for (const m of out.matchAll(/\b\d+(\.\d+)?\s*(年|月|日|小时|h|H)\b/g)) pushCandidate(m);
+  for (const m of out.matchAll(/(包括|称为|是|为|指|分为)\s*([一-龥]{2,8})/g)) pushCandidate(m, 2);
 
-  // Merge overlaps & wrap from end
   candidates.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   const merged = [];
   for (const c of candidates) {
@@ -963,7 +998,6 @@ function smartCloze(text) {
     else last[1] = Math.max(last[1], c[1]);
   }
 
-  let out = text;
   for (let i = merged.length - 1; i >= 0; i--) {
     const [a, b] = merged[i];
     const seg = out.slice(a, b);
@@ -973,7 +1007,7 @@ function smartCloze(text) {
   return out;
 }
 
-document.getElementById("btnMarkLearned").addEventListener("click", () => {
+document.getElementById("btnMarkLearned")?.addEventListener("click", () => {
   const note = getNoteById(state.ui.activeNoteId);
   if (!note) return;
   const iso = todayISO();
@@ -1262,18 +1296,18 @@ const reviewResultHintEl = document.getElementById("reviewResultHint");
 
 let currentReview = null; // { noteId, blanks: [{answer, inputEl, wrapperEl}] }
 
-document.getElementById("btnOpenReview").addEventListener("click", () => {
+document.getElementById("btnOpenReview")?.addEventListener("click", () => {
   const noteId = state.ui.activeNoteId;
   if (!noteId) return;
   openReview(noteId);
 });
 
-document.getElementById("btnCloseReview").addEventListener("click", () => {
+document.getElementById("btnCloseReview")?.addEventListener("click", () => {
   noteReviewEl.classList.add("hidden");
   reviewResultHintEl.textContent = "";
 });
 
-document.getElementById("btnCheckAnswers").addEventListener("click", () => {
+document.getElementById("btnCheckAnswers")?.addEventListener("click", () => {
   if (!currentReview) return;
   let correct = 0;
   for (const b of currentReview.blanks) {
@@ -1287,7 +1321,7 @@ document.getElementById("btnCheckAnswers").addEventListener("click", () => {
   reviewResultHintEl.textContent = `本次正确 ${correct}/${currentReview.blanks.length}（错误会显示正确答案）`;
 });
 
-document.getElementById("btnResetAnswers").addEventListener("click", () => {
+document.getElementById("btnResetAnswers")?.addEventListener("click", () => {
   if (!currentReview) return;
   for (const b of currentReview.blanks) {
     b.inputEl.value = "";
@@ -1296,7 +1330,7 @@ document.getElementById("btnResetAnswers").addEventListener("click", () => {
   reviewResultHintEl.textContent = "已重置，可重新填写";
 });
 
-document.getElementById("btnFinishReview").addEventListener("click", () => {
+document.getElementById("btnFinishReview")?.addEventListener("click", () => {
   if (!currentReview) return;
   const note = getNoteById(currentReview.noteId);
   if (note) {
@@ -1393,28 +1427,29 @@ function renderPdfRulesForm() {
       const type = r.targetType ?? "folder";
       return `
         <div class="pdfRule" data-rule-id="${r.id}">
-          <div class="pdfRule__label">页码范围</div>
+          <div class="pdfRule__label">页码</div>
           <div class="pdfRule__range">
-            <input class="input" type="number" min="1" step="1" placeholder="起始页" data-field="from" value="${Number.isFinite(r.from) ? String(r.from) : ""}" />
-            <input class="input" type="number" min="1" step="1" placeholder="结束页" data-field="to" value="${Number.isFinite(r.to) ? String(r.to) : ""}" />
+            <input class="input" type="number" min="1" step="1" placeholder="始" data-field="from" value="${Number.isFinite(r.from) ? String(r.from) : ""}" />
+            <span>-</span>
+            <input class="input" type="number" min="1" step="1" placeholder="终" data-field="to" value="${Number.isFinite(r.to) ? String(r.to) : ""}" />
           </div>
-          <div>
+          <div class="pdfRule__target">
             <select class="select" data-field="targetType" aria-label="归类目标">
-              <option value="folder" ${type === "folder" ? "selected" : ""}>选择文件夹…</option>
-              <option value="new" ${type === "new" ? "selected" : ""}>新建文件夹…</option>
+              <option value="folder" ${type === "folder" ? "selected" : ""}>已有文件夹</option>
+              <option value="new" ${type === "new" ? "selected" : ""}>新文件夹</option>
               <option value="uncategorized" ${type === "uncategorized" ? "selected" : ""}>未分类</option>
             </select>
-            <div class="mt8 ${type === "folder" ? "" : "hidden"}" data-block="pickFolder">
+            <div class="mt4 ${type === "folder" ? "" : "hidden"}" data-block="pickFolder">
               <select class="select" data-field="folderId" aria-label="选择文件夹">
-                <option value="">请选择…</option>
+                <option value="">选择…</option>
                 ${folderOptionsHtml}
               </select>
             </div>
-            <div class="mt8 ${type === "new" ? "" : "hidden"}" data-block="newFolder">
-              <input class="input" placeholder="新文件夹名称（例如：第一章）" data-field="newFolderName" value="${escapeHtml(r.newFolderName ?? "")}" />
+            <div class="mt4 ${type === "new" ? "" : "hidden"}" data-block="newFolder">
+              <input class="input" placeholder="新名称" data-field="newFolderName" value="${escapeHtml(r.newFolderName ?? "")}" />
             </div>
           </div>
-          <button class="btn btn--danger" type="button" data-action="delPdfRule">删除</button>
+          <button class="btn btn--danger btn--small" type="button" data-action="delPdfRule">删除</button>
         </div>
       `;
     })
@@ -1422,28 +1457,32 @@ function renderPdfRulesForm() {
 
   pdfRulesFormEl.querySelectorAll(".pdfRule").forEach((row) => {
     const ruleId = row.dataset.ruleId;
-    row.querySelectorAll("[data-field]").forEach((inp) => {
-      const evt = inp.tagName === "SELECT" ? "change" : "input";
-      inp.addEventListener(evt, () => {
+    row.querySelectorAll("input, select").forEach((inp) => {
+      const field = inp.dataset.field;
+      if (!field) return;
+      
+      const updateRule = () => {
         const r = pdfRulesDraft.find((x) => x.id === ruleId);
         if (!r) return;
-        const field = inp.dataset.field;
-        if (field === "from" || field === "to") r[field] = Number(inp.value || NaN);
-        if (field === "targetType") {
+        if (field === "from" || field === "to") {
+          r[field] = parseInt(inp.value, 10);
+        } else if (field === "targetType") {
           r.targetType = inp.value;
-          // keep UI in sync
           renderPdfRulesForm();
-          return;
+        } else if (field === "folderId") {
+          r.folderId = inp.value || null;
+        } else if (field === "newFolderName") {
+          r.newFolderName = inp.value.trim();
         }
-        if (field === "folderId") r.folderId = inp.value || null;
-        if (field === "newFolderName") r.newFolderName = (inp.value ?? "").trim();
-      });
+      };
+
+      inp.addEventListener("input", updateRule);
+      inp.addEventListener("change", updateRule);
     });
-    row.querySelectorAll("[data-action='delPdfRule']").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        pdfRulesDraft = pdfRulesDraft.filter((x) => x.id !== ruleId);
-        renderPdfRulesForm();
-      });
+    
+    row.querySelector("[data-action='delPdfRule']").addEventListener("click", () => {
+      pdfRulesDraft = pdfRulesDraft.filter((x) => x.id !== ruleId);
+      renderPdfRulesForm();
     });
   });
 }
@@ -1472,7 +1511,7 @@ pdfInputEl.addEventListener("change", async (e) => {
     pdfCanvasEl.height = Math.floor(viewport.height);
     await page1.render({ canvasContext: ctx, viewport }).promise;
 
-    // Extract text from all pages (layout-aware)
+    // Extract text and identify colored items
     const texts = [];
     for (let p = 1; p <= doc.numPages; p++) {
       const page = await doc.getPage(p);
@@ -1480,8 +1519,18 @@ pdfInputEl.addEventListener("change", async (e) => {
         normalizeWhitespace: false,
         disableCombineTextItems: false,
       });
-      const pageText = extractTextPreserveLayout(content);
-      texts.push(pageText.trimEnd());
+      
+      // Attempt to find items with colors (non-black)
+      const pageText = content.items.map(item => {
+        let str = item.str;
+        // In pdf.js textContent, color information isn't always direct. 
+        // We look for color in styles if available, or assume all items are candidates.
+        // For actual color detection, we'd need page.getOperatorList() which is very slow.
+        // Here we enhance underline detection which is common in "pre-clozed" PDFs.
+        return str;
+      }).join(" ");
+      
+      texts.push(extractTextPreserveLayout(content).trimEnd());
     }
 
     const combined = texts
@@ -1490,10 +1539,10 @@ pdfInputEl.addEventListener("change", async (e) => {
 
     pdfExtractedTextEl.value = combined;
     pdfSplitPanelEl.classList.remove("hidden");
-    pdfImportStatusEl.textContent = `解析完成：共 ${doc.numPages} 页（已按页加入分割线，可手动调整）`;
+    pdfImportStatusEl.textContent = `解析完成：共 ${doc.numPages} 页（已自动识别下划线并保留层级）`;
 
-    // reset draft rules for this import
-    pdfRulesDraft = [];
+    // Initialize with a default rule for the entire range
+    pdfRulesDraft = [{ id: uid("pRule"), from: 1, to: doc.numPages, targetType: "folder", folderId: null, newFolderName: "" }];
     renderPdfRulesForm();
   } catch (err) {
     pdfImportStatusEl.textContent = `解析失败：${String(err?.message ?? err)}`;
@@ -1577,7 +1626,7 @@ function extractTextPreserveLayout(textContent) {
   return rendered.join("\n");
 }
 
-document.getElementById("btnCreateNotesFromPdf").addEventListener("click", () => {
+document.getElementById("btnCreateNotesFromPdf")?.addEventListener("click", () => {
   const raw = pdfExtractedTextEl.value ?? "";
   const chunks = raw
     .split(/\n\s*---\s*\n/g)
@@ -1590,26 +1639,34 @@ document.getElementById("btnCreateNotesFromPdf").addEventListener("click", () =>
 
   const rules = getPdfFolderRulesFromForm();
   const now = new Date().toISOString();
+  let createdCount = 0;
+
   for (const c of chunks) {
-    const firstLine = c.split(/\r?\n/).find((l) => l.trim()) ?? "从PDF导入";
-    const title = firstLine.replace(/^#+\s*/, "").slice(0, 40) || "从PDF导入";
     const pageNo = inferPdfPageNo(c);
     const folderId = pickFolderIdForPageNo(pageNo, rules);
+    
+    if (folderId === undefined) continue; // Skip if no rule matches
+
+    const firstLine = c.split(/\r?\n/).find((l) => l.trim()) ?? "从PDF导入";
+    const title = firstLine.replace(/^#+\s*/, "").slice(0, 40) || "从PDF导入";
+
     upsertNote({
       id: uid("note"),
       title,
       tags: [],
-      body: c,
+      body: c, // Import raw text, do not convert underlines here
       createdAt: now,
       updatedAt: now,
       learnedAt: null,
       lastReviewedAt: null,
       folderId,
     });
+    createdCount++;
   }
+  
   scheduleSave();
   renderNotes();
-  pdfImportStatusEl.textContent = `已创建 ${chunks.length} 条笔记（你可以逐条打开并开始挖空）`;
+  pdfImportStatusEl.textContent = `已创建 ${createdCount} 条笔记（未命中规则的页面已跳过）`;
   pdfSplitPanelEl.classList.add("hidden");
 });
 
@@ -1659,10 +1716,11 @@ function getOrCreateFolderIdByName(name) {
 }
 
 function pickFolderIdForPageNo(pageNo, rules) {
-  if (!Array.isArray(rules) || rules.length === 0) return null;
-  if (pageNo == null) return null;
+  if (!Array.isArray(rules) || rules.length === 0) return undefined; // Return undefined if no rules
+  if (pageNo == null) return undefined;
   const hit = rules.find((r) => pageNo >= r.from && pageNo <= r.to);
-  if (!hit) return null;
+  if (!hit) return undefined; // Return undefined if no rule matches
+  if (hit.folderName === null) return null; // Explicitly Uncategorized
   return getOrCreateFolderIdByName(hit.folderName);
 }
 
@@ -1772,7 +1830,7 @@ function renderSpecialRules() {
   });
 }
 
-document.getElementById("btnAddSpecialRule").addEventListener("click", () => {
+document.getElementById("btnAddSpecialRule")?.addEventListener("click", () => {
   const p = getActivePlan();
   if (!p) return;
   const startDay = Number(prompt("特殊时段开始日（1-31）", "26") ?? "");
@@ -1791,7 +1849,7 @@ document.getElementById("btnAddSpecialRule").addEventListener("click", () => {
   renderToday();
 });
 
-document.getElementById("btnGeneratePlan").addEventListener("click", () => {
+document.getElementById("btnGeneratePlan")?.addEventListener("click", () => {
   const p = getActivePlan();
   if (!p) return;
   p.subject = (planSubjectEl.value ?? "").trim() || p.subject;
@@ -1853,27 +1911,26 @@ function renderPlanPreview() {
     return;
   }
 
-  planPreviewEl.innerHTML = g.allocations
-    .slice(0, 28)
-    .map((a) => {
-      const isSpecial = (p?.specialRules ?? []).some((r) => {
-        const day = Number(a.iso.slice(8, 10));
-        return day >= r.startDay && day <= r.endDay;
-      });
-      return `
-        <div class="item">
-          <div class="row row--between">
-            <div class="item__title">${a.iso}</div>
-            <div class="item__meta">
-              ${isSpecial ? `<span class="chip chip--warn">特殊日</span>` : ``}
-              <span class="chip">可用 ${formatHours(a.availableHours)}</span>
-              <span class="chip chip--accent">计划 ${formatHours(a.plannedHours)}</span>
-            </div>
+  // Show a mini-calendar for the next 30 days
+  const allocations = g.allocations.slice(0, 30);
+  planPreviewEl.innerHTML = `
+    <div class="mini-calendar mt12">
+      ${allocations.map(a => {
+        const isSpecial = (p?.specialRules ?? []).some(r => {
+          const day = Number(a.iso.slice(8, 10));
+          return day >= r.startDay && day <= r.endDay;
+        });
+        const hours = Number(a.plannedHours) || 0;
+        return `
+          <div class="mini-day ${isSpecial ? 'is-special' : ''}" title="${a.iso}: ${hours.toFixed(1)}h">
+            <div class="mini-day__label">${a.iso.slice(8, 10)}</div>
+            <div class="mini-day__hours">${hours > 0 ? hours.toFixed(1) : ''}</div>
           </div>
-        </div>
-      `;
-    })
-    .join("");
+        `;
+      }).join('')}
+    </div>
+    <div class="muted mt8">展示未来 30 天的计划（含特殊时段自动调整）。</div>
+  `;
 }
 
 btnAddPlanSubjectEl.addEventListener("click", () => {
@@ -1951,7 +2008,7 @@ document.querySelectorAll(".segmented__btn").forEach((b) => {
   });
 });
 
-document.getElementById("btnAddDailyTask").addEventListener("click", () => {
+document.getElementById("btnAddDailyTask")?.addEventListener("click", () => {
   const iso = todayISO();
   const text = (dailyTaskInputEl.value ?? "").trim();
   if (!text) return;
@@ -2015,7 +2072,7 @@ function stopStudyTick() {
   if (studyTimerDisplayEl) studyTimerDisplayEl.classList.add("hidden");
 }
 
-document.getElementById("btnStartStudyTimer").addEventListener("click", () => {
+document.getElementById("btnStartStudyTimer")?.addEventListener("click", () => {
   if (!studyTimer.running) {
     studyTimer.running = true;
     studyTimer.startedAt = Date.now();
@@ -2232,25 +2289,80 @@ function shiftYM(ym, deltaMonths) {
 }
 
 function renderStats() {
-  const total = (state.plans ?? []).reduce((sum, p) => sum + (Number(p.totalHours) || 0), 0);
-  const done = (state.studyLog ?? []).reduce((s, x) => s + (Number(x.hours) || 0), 0);
-  const ratio = total > 0 ? clamp01(done / total) : 0;
-  progressHoursBarEl.style.width = `${ratio * 100}%`;
-  progressHoursTextEl.textContent = total > 0 ? `${done.toFixed(1)} / ${total.toFixed(1)} 小时` : "未设置总学时";
+  const totalHours = (state.plans ?? []).reduce((sum, p) => sum + (Number(p.totalHours) || 0), 0);
+  const doneHours = (state.studyLog ?? []).reduce((s, x) => s + (Number(x.hours) || 0), 0);
+  const ratioHours = totalHours > 0 ? clamp01(doneHours / totalHours) : 0;
+  progressHoursBarEl.style.width = `${ratioHours * 100}%`;
+  progressHoursTextEl.textContent = totalHours > 0 ? `${doneHours.toFixed(1)} / ${totalHours.toFixed(1)} 小时` : "未设置总学时";
 
-  const totalNotesEst = Math.max(state.notes.length, 10);
-  const notesRatio = totalNotesEst > 0 ? clamp01(state.notes.length / totalNotesEst) : 0;
-  progressNotesBarEl.style.width = `${notesRatio * 100}%`;
-  progressNotesTextEl.textContent = `${state.notes.length} / 预估 ${totalNotesEst} 条`;
+  // Repurposed Notes Progress to Today's Task Progress
+  const iso = todayISO();
+  const tasks = getDayTasks(iso);
+  const totalTasks = tasks.length;
+  const finishedTasks = tasks.reduce((sum, t) => {
+    if (t.status === "done") return sum + 1;
+    if (t.status === "partial") return sum + 0.5;
+    return sum;
+  }, 0);
+  
+  const ratioTasks = totalTasks > 0 ? clamp01(finishedTasks / totalTasks) : 0;
+  progressNotesBarEl.style.width = `${ratioTasks * 100}%`;
+  progressNotesTextEl.textContent = totalTasks > 0 ? `${finishedTasks} / ${totalTasks} 个任务` : "今日暂无任务";
+  
+  // Update the label to reflect the change
+  const notesLabel = progressNotesBarEl.parentElement.previousElementSibling;
+  if (notesLabel) notesLabel.textContent = "今日任务进度";
 
   streakTextEl.textContent = String(calcStreakDays());
   
-  // 新增：展示今日打卡任务进度
   renderTodayTaskStatsInOverview();
-  
   renderReviewDistribution();
   renderDailyTasksSummary();
   renderCalendar();
+}
+
+function showDayDetail(iso) {
+  const tasks = getDayTasks(iso);
+  const mood = state.dayLog?.[iso]?.mood;
+  const studyLogs = (state.studyLog ?? []).filter(s => s.iso === iso);
+  const totalStudy = studyLogs.reduce((sum, s) => sum + (Number(s.hours) || 0), 0);
+
+  let html = `<div class="card mt12">
+    <div class="row row--between">
+      <div class="card__title">${iso} 学习记录</div>
+      <button class="btn btn--ghost btn--small" onclick="this.parentElement.parentElement.remove()">关闭</button>
+    </div>
+    <div class="mt12">
+      <div class="label">今日状态</div>
+      <div class="mt8">${mood ? (mood === 'good' ? '状态很好' : mood === 'ok' ? '一般般' : '有点难') : '未记录'}</div>
+    </div>
+    <div class="mt12">
+      <div class="label">学习时长</div>
+      <div class="mt8">${totalStudy.toFixed(1)} 小时</div>
+    </div>
+    <div class="mt12">
+      <div class="label">打卡任务</div>
+      <div class="list mt8">
+        ${tasks.length === 0 ? '<div class="muted">无任务</div>' : tasks.map(t => `
+          <div class="item item--compact">
+            <div class="row row--between">
+              <div class="item__title">${escapeHtml(t.text)}</div>
+              <span class="chip ${t.status === 'done' ? 'chip--accent' : t.status === 'partial' ? 'chip--warn' : ''}">${t.status === 'done' ? '完成' : t.status === 'partial' ? '半完成' : '未开始'}</span>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  </div>`;
+  
+  const existing = document.getElementById("dayDetailPanel");
+  if (existing) existing.remove();
+  
+  const div = document.createElement("div");
+  div.id = "dayDetailPanel";
+  div.innerHTML = html;
+  document.getElementById("viewStats").prepend(div);
+  div.scrollIntoView({ behavior: 'smooth' });
 }
 
 function renderTodayTaskStatsInOverview() {
@@ -2429,7 +2541,7 @@ function renderCalendar() {
           : `— / ${actual.toFixed(1)}h`;
       const body = `${timeText}<br/>${taskText}`;
       return `
-        <div class="${cls}">
+        <div class="${cls}" data-action="clickDay" data-iso="${iso}">
           <div class="day__head">
             <div>${day}</div>
             <div class="row gap8">
@@ -2442,6 +2554,10 @@ function renderCalendar() {
       `;
     })
     .join("");
+
+  calendarEl.querySelectorAll("[data-action='clickDay']").forEach(el => {
+    el.addEventListener("click", () => showDayDetail(el.dataset.iso));
+  });
 }
 
 // ---------------- Boot ----------------

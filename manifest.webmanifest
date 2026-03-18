@@ -1,12 +1,12 @@
 {
-  "name": "CPA学习助手",
-  "short_name": "CPA学习",
-  "description": "CPA学习笔记/挖空复习/计划/打卡（离线可用）",
+  "name": "学习助手",
+  "short_name": "学习助手",
+  "description": "学习笔记/挖空复习/计划/打卡（离线可用）",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#f3fbf7",
-  "theme_color": "#19a974",
+  "background_color": "#f5f5f7",
+  "theme_color": "#0071e3",
   "icons": [
     {
       "sizes": "512x512",
