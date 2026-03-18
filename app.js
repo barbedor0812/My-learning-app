@@ -134,14 +134,13 @@ let savingTimer = null;
 let cloudSaveInFlight = null;
 let cloudSaveQueued = false;
 let applyingRemote = false;
-let realtimeChannel = null;
 let cloudPollTimer = null;
 let cloudHooksBound = false;
 let cloudRetryTimer = null;
 let cloudRetryDelayMs = 2000;
 let cloudRetryTick = null;
 let cloudNextRetryAt = null;
-let realtimeHealthy = true;
+let lastCloudPullErrorAt = 0;
 
 function withTimeout(promise, ms) {
   let t = null;
@@ -225,41 +224,24 @@ async function syncFromCloud() {
 }
 
 function stopCloudSync() {
-  if (realtimeChannel) {
-    try {
-      realtimeChannel.unsubscribe();
-    } catch {}
-    realtimeChannel = null;
-  }
   if (cloudPollTimer) {
     clearInterval(cloudPollTimer);
     cloudPollTimer = null;
   }
-  realtimeHealthy = true;
 }
 
 function startCloudSync(userId) {
   stopCloudSync();
   if (!supabaseClient) return;
-
-  realtimeChannel = supabaseClient
-    .channel(`app_state_${userId}`)
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "app_state", filter: `user_id=eq.${userId}` },
-      (payload) => {
-        const remote = payload?.new?.data;
-        if (!remote) return;
-        const migrated = migrateState(remote);
-        if (shouldApplyRemote(migrated)) applyRemoteState(migrated);
-      },
-    )
-    .subscribe((status) => {
-      if (status === "SUBSCRIBED") realtimeHealthy = true;
-      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") realtimeHealthy = false;
+  cloudPollTimer = setInterval(() => {
+    syncFromCloud().catch((e) => {
+      const now = Date.now();
+      if (now - lastCloudPullErrorAt > 60000) {
+        lastCloudPullErrorAt = now;
+        console.error(e);
+      }
     });
-
-  cloudPollTimer = setInterval(syncFromCloud, 2000);
+  }, 30000);
 
   if (!cloudHooksBound) {
     cloudHooksBound = true;
@@ -315,7 +297,7 @@ async function flushCloudSave() {
       if (!navigator.onLine) {
         setCloudStatus("云端：离线（等待网络恢复）", "bad");
       } else {
-        setCloudStatus("云端：同步失败（自动重试）", "bad");
+        setCloudStatus("云端：同步失败（自动重试，仍每30秒拉取）", "bad");
       }
       if (!cloudRetryTimer) {
         const delay = cloudRetryDelayMs;
@@ -594,7 +576,7 @@ async function onAuthChanged(session) {
       } else {
         state = localBefore;
       }
-      setCloudStatus("云端：已连接", "ok");
+      setCloudStatus("云端：已连接（每30秒自动同步）", "ok");
       startCloudSync(currentUser.id);
       const pendingRaw = localStorage.getItem(CLOUD_PENDING_KEY);
       if (pendingRaw) {

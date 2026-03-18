@@ -1,5 +1,5 @@
 // Bump this when core files change to avoid old-cache issues.
-const CACHE_NAME = "cpa-study-assistant-pwa-v20";
+const CACHE_NAME = "cpa-study-assistant-pwa-v21";
 const ASSETS = [
   "./",
   "./index.html",
