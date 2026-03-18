@@ -136,6 +136,8 @@ let applyingRemote = false;
 let realtimeChannel = null;
 let cloudPollTimer = null;
 let cloudHooksBound = false;
+let cloudRetryTimer = null;
+let cloudRetryDelayMs = 2000;
 
 function withTimeout(promise, ms) {
   let t = null;
@@ -171,6 +173,18 @@ function shouldApplyRemote(remote) {
   const rAt = String(rcm?.updatedAt || "");
   const lAt = String(lcm?.updatedAt || "");
   return rAt && rAt > lAt;
+}
+
+function isStateNewer(a, b) {
+  const acm = a && typeof a === "object" ? (a.cloudMeta && typeof a.cloudMeta === "object" ? a.cloudMeta : null) : null;
+  const bcm = b && typeof b === "object" ? (b.cloudMeta && typeof b.cloudMeta === "object" ? b.cloudMeta : null) : null;
+  const aAt = String(acm?.updatedAt || "");
+  const bAt = String(bcm?.updatedAt || "");
+  if (aAt && bAt && aAt !== bAt) return aAt > bAt;
+  const aRev = Number(acm?.rev) || 0;
+  const bRev = Number(bcm?.rev) || 0;
+  if (aRev !== bRev) return aRev > bRev;
+  return false;
 }
 
 function applyRemoteState(remote) {
@@ -245,9 +259,22 @@ async function flushCloudSave() {
       setCloudStatus("云端：同步中…", "warn");
       await withTimeout(saveToCloud(currentUser.id), 10000);
       setCloudStatus("云端：已同步", "ok");
+      cloudRetryDelayMs = 2000;
+      if (cloudRetryTimer) {
+        clearTimeout(cloudRetryTimer);
+        cloudRetryTimer = null;
+      }
     } catch (err) {
       console.error(err);
-      setCloudStatus("云端：同步失败", "bad");
+      setCloudStatus("云端：同步失败（自动重试）", "bad");
+      if (!cloudRetryTimer) {
+        const delay = cloudRetryDelayMs;
+        cloudRetryDelayMs = Math.min(60000, Math.floor(cloudRetryDelayMs * 1.7));
+        cloudRetryTimer = setTimeout(() => {
+          cloudRetryTimer = null;
+          flushCloudSave();
+        }, delay);
+      }
     } finally {
       cloudSaveInFlight = null;
       if (cloudSaveQueued) {
@@ -269,7 +296,22 @@ function scheduleSave() {
 }
 
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  const HISTORY_KEY = `${STORAGE_KEY}.history`;
+  try {
+    const prev = localStorage.getItem(STORAGE_KEY);
+    const next = JSON.stringify(state);
+    if (prev && prev !== next) {
+      const raw = localStorage.getItem(HISTORY_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      const list = Array.isArray(arr) ? arr : [];
+      list.unshift({ at: new Date().toISOString(), data: prev });
+      while (list.length > 5) list.pop();
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+    }
+    localStorage.setItem(STORAGE_KEY, next);
+  } catch {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
 }
 
 function createInitialState() {
@@ -483,9 +525,18 @@ async function onAuthChanged(session) {
     accountHintEl.textContent = `已登录：${currentUser.email}（数据会自动云端同步）`;
     setCloudStatus("云端：同步中…", "warn");
     try {
-      state = await loadFromCloud(currentUser.id);
+      const localBefore = loadState();
+      const remoteLoaded = await loadFromCloud(currentUser.id);
+
+      const remoteIsNewer = isStateNewer(remoteLoaded, localBefore);
+      if (remoteIsNewer) {
+        state = remoteLoaded;
+      } else {
+        state = localBefore;
+      }
       setCloudStatus("云端：已连接", "ok");
       startCloudSync(currentUser.id);
+      if (!remoteIsNewer) scheduleSave();
     } catch (e) {
       console.error(e);
       setCloudStatus("云端：连接失败", "bad");
@@ -507,6 +558,9 @@ async function onAuthChanged(session) {
 if (supabaseClient) {
   supabaseClient.auth.onAuthStateChange((_event, session) => onAuthChanged(session));
   supabaseClient.auth.getSession().then(({ data }) => onAuthChanged(data.session));
+  window.addEventListener("online", () => {
+    if (currentUser?.id) flushCloudSave();
+  });
 }
 
 if (btnOpenAccountEl) btnOpenAccountEl.addEventListener("click", () => accountPanelEl.classList.remove("hidden"));
