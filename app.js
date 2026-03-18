@@ -222,7 +222,7 @@ function startCloudSync(userId) {
     )
     .subscribe();
 
-  cloudPollTimer = setInterval(syncFromCloud, 4000);
+  cloudPollTimer = setInterval(syncFromCloud, 2000);
 
   if (!cloudHooksBound) {
     cloudHooksBound = true;
