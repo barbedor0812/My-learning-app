@@ -30,14 +30,34 @@ function uid(prefix = "id") {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function pad2(n) {
+  return String(n).padStart(2, "0");
+}
+
+function toISODateLocal(d) {
+  const dt = d instanceof Date ? d : new Date(d);
+  return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
+}
+
+function parseISODateLocal(iso) {
+  const parts = String(iso ?? "").split("-");
+  if (parts.length !== 3) return null;
+  const y = Number(parts[0]);
+  const m = Number(parts[1]);
+  const d = Number(parts[2]);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null;
+  if (y <= 0 || m <= 0 || d <= 0) return null;
+  return new Date(y, m - 1, d);
+}
+
 function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  return toISODateLocal(new Date());
 }
 
 function addDaysISO(isoDate, days) {
-  const d = new Date(`${isoDate}T00:00:00`);
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  const base = parseISODateLocal(isoDate) ?? new Date();
+  base.setDate(base.getDate() + days);
+  return toISODateLocal(base);
 }
 
 function clamp01(n) {
@@ -1876,13 +1896,13 @@ document.getElementById("btnGeneratePlan")?.addEventListener("click", () => {
 
 function generatePlan({ fromISO, toISO, totalHours, dailyHours, specialRules }) {
   if (!toISO) return null;
-  const from = new Date(`${fromISO}T00:00:00`);
-  const to = new Date(`${toISO}T00:00:00`);
+  const from = parseISODateLocal(fromISO) ?? new Date();
+  const to = parseISODateLocal(toISO) ?? new Date();
   if (!(from <= to) || totalHours <= 0) return null;
 
   const days = [];
   for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
-    const iso = d.toISOString().slice(0, 10);
+    const iso = toISODateLocal(d);
     const day = d.getDate();
     let hours = dailyHours;
     for (const r of specialRules ?? []) {
@@ -2508,7 +2528,7 @@ function renderCalendar() {
   calendarEl.innerHTML = cells
     .map((date) => {
       if (!date) return `<div class="day is-missed" aria-hidden="true"></div>`;
-      const iso = date.toISOString().slice(0, 10);
+      const iso = toISODateLocal(date);
       const day = date.getDate();
       const isSpecial = (state.plans ?? []).some((p) => (p.specialRules ?? []).some((r) => day >= r.startDay && day <= r.endDay));
       const planned = (state.plans ?? [])
