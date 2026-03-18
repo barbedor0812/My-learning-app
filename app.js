@@ -245,9 +245,16 @@ function startCloudSync(userId) {
 
   if (!cloudHooksBound) {
     cloudHooksBound = true;
-    window.addEventListener("focus", syncFromCloud);
+    const onForeground = () => {
+      if (!currentUser?.id) return;
+      startCloudSync(currentUser.id);
+      syncFromCloud();
+      flushCloudSave();
+    };
+    window.addEventListener("focus", onForeground);
+    window.addEventListener("pageshow", onForeground);
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") syncFromCloud();
+      if (document.visibilityState === "visible") onForeground();
     });
   }
 }
