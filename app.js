@@ -23,6 +23,7 @@ try {
 }
 
 const STORAGE_KEY = "cpaStudyAssistant.v1";
+const CLOUD_PENDING_KEY = `${STORAGE_KEY}.pendingCloud`;
 
 const EBBINGHAUS_DAYS = [1, 2, 4, 7, 15, 30];
 
@@ -138,6 +139,9 @@ let cloudPollTimer = null;
 let cloudHooksBound = false;
 let cloudRetryTimer = null;
 let cloudRetryDelayMs = 2000;
+let cloudRetryTick = null;
+let cloudNextRetryAt = null;
+let realtimeHealthy = true;
 
 function withTimeout(promise, ms) {
   let t = null;
@@ -149,6 +153,21 @@ function withTimeout(promise, ms) {
   ]).finally(() => {
     if (t) clearTimeout(t);
   });
+}
+
+function setCloudRetryCountdown(ms) {
+  cloudNextRetryAt = Date.now() + ms;
+  if (cloudRetryTick) return;
+  cloudRetryTick = setInterval(() => {
+    if (!cloudNextRetryAt) {
+      clearInterval(cloudRetryTick);
+      cloudRetryTick = null;
+      return;
+    }
+    const left = cloudNextRetryAt - Date.now();
+    if (left <= 0) return;
+    setCloudStatus(`云端：同步失败（${Math.ceil(left / 1000)}s 后重试）`, "bad");
+  }, 500);
 }
 
 function touchCloudMeta() {
@@ -216,6 +235,7 @@ function stopCloudSync() {
     clearInterval(cloudPollTimer);
     cloudPollTimer = null;
   }
+  realtimeHealthy = true;
 }
 
 function startCloudSync(userId) {
@@ -234,7 +254,10 @@ function startCloudSync(userId) {
         if (shouldApplyRemote(migrated)) applyRemoteState(migrated);
       },
     )
-    .subscribe();
+    .subscribe((status) => {
+      if (status === "SUBSCRIBED") realtimeHealthy = true;
+      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") realtimeHealthy = false;
+    });
 
   cloudPollTimer = setInterval(syncFromCloud, 2000);
 
@@ -257,19 +280,47 @@ async function flushCloudSave() {
   cloudSaveInFlight = (async () => {
     try {
       setCloudStatus("云端：同步中…", "warn");
-      await withTimeout(saveToCloud(currentUser.id), 10000);
+      const snapshot = JSON.stringify(state);
+      localStorage.setItem(CLOUD_PENDING_KEY, snapshot);
+
+      try {
+        await withTimeout(saveToCloud(currentUser.id), 30000);
+      } catch (e) {
+        if (String(e?.message ?? e) === "timeout") {
+          setCloudStatus("云端：同步超时（确认中…）", "warn");
+          const remote = await withTimeout(loadFromCloud(currentUser.id), 15000);
+          const remoteOk =
+            remote &&
+            typeof remote === "object" &&
+            remote.cloudMeta &&
+            typeof remote.cloudMeta === "object" &&
+            remote.cloudMeta.updatedBy === CLIENT_ID &&
+            (Number(remote.cloudMeta.rev) || 0) >= (Number(state.cloudMeta?.rev) || 0);
+          if (!remoteOk) throw e;
+        } else {
+          throw e;
+        }
+      }
+
       setCloudStatus("云端：已同步", "ok");
+      localStorage.removeItem(CLOUD_PENDING_KEY);
       cloudRetryDelayMs = 2000;
+      cloudNextRetryAt = null;
       if (cloudRetryTimer) {
         clearTimeout(cloudRetryTimer);
         cloudRetryTimer = null;
       }
     } catch (err) {
       console.error(err);
-      setCloudStatus("云端：同步失败（自动重试）", "bad");
+      if (!navigator.onLine) {
+        setCloudStatus("云端：离线（等待网络恢复）", "bad");
+      } else {
+        setCloudStatus("云端：同步失败（自动重试）", "bad");
+      }
       if (!cloudRetryTimer) {
         const delay = cloudRetryDelayMs;
         cloudRetryDelayMs = Math.min(60000, Math.floor(cloudRetryDelayMs * 1.7));
+        setCloudRetryCountdown(delay);
         cloudRetryTimer = setTimeout(() => {
           cloudRetryTimer = null;
           flushCloudSave();
@@ -518,6 +569,15 @@ function setCloudStatus(text, kind = "idle") {
           : "var(--border)";
 }
 
+if (cloudStatusEl) {
+  cloudStatusEl.style.cursor = "pointer";
+  cloudStatusEl.title = "点击立即同步/拉取云端";
+  cloudStatusEl.addEventListener("click", () => {
+    syncFromCloud();
+    flushCloudSave();
+  });
+}
+
 async function onAuthChanged(session) {
   currentUser = session?.user ?? null;
   if (currentUser?.id) {
@@ -536,7 +596,15 @@ async function onAuthChanged(session) {
       }
       setCloudStatus("云端：已连接", "ok");
       startCloudSync(currentUser.id);
-      if (!remoteIsNewer) scheduleSave();
+      const pendingRaw = localStorage.getItem(CLOUD_PENDING_KEY);
+      if (pendingRaw) {
+        try {
+          const pendingState = migrateState(JSON.parse(pendingRaw));
+          if (isStateNewer(pendingState, state)) state = pendingState;
+        } catch {}
+      }
+
+      if (!remoteIsNewer || pendingRaw) scheduleSave();
     } catch (e) {
       console.error(e);
       setCloudStatus("云端：连接失败", "bad");
@@ -560,6 +628,9 @@ if (supabaseClient) {
   supabaseClient.auth.getSession().then(({ data }) => onAuthChanged(data.session));
   window.addEventListener("online", () => {
     if (currentUser?.id) flushCloudSave();
+  });
+  window.addEventListener("offline", () => {
+    setCloudStatus("云端：离线（等待网络恢复）", "bad");
   });
 }
 
