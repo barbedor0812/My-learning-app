@@ -147,6 +147,8 @@ let lastCloudPullErrorAt = 0;
 let authEnsureInFlight = null;
 let lastCloudErrorMsg = "";
 let lastCloudErrorAt = 0;
+let syncInFlight = null;
+let syncQueued = false;
 
 function recordCloudError(err) {
   lastCloudErrorAt = Date.now();
@@ -315,6 +317,29 @@ async function syncFromCloud() {
   }
 }
 
+function syncData() {
+  if (!currentUser?.id) return Promise.resolve();
+  if (syncInFlight) {
+    syncQueued = true;
+    return syncInFlight;
+  }
+
+  syncInFlight = (async () => {
+    try {
+      await syncFromCloud();
+      await flushCloudSave();
+    } finally {
+      syncInFlight = null;
+      if (syncQueued) {
+        syncQueued = false;
+        syncData();
+      }
+    }
+  })();
+
+  return syncInFlight;
+}
+
 function stopCloudSync() {
   if (cloudPollTimer) {
     clearInterval(cloudPollTimer);
@@ -326,13 +351,7 @@ function startCloudSync(userId) {
   stopCloudSync();
   if (!supabaseClient) return;
   cloudPollTimer = setInterval(() => {
-    syncFromCloud().catch((e) => {
-      const now = Date.now();
-      if (now - lastCloudPullErrorAt > 60000) {
-        lastCloudPullErrorAt = now;
-        console.error(e);
-      }
-    });
+    syncData();
   }, 30000);
 
   if (!cloudHooksBound) {
@@ -340,8 +359,7 @@ function startCloudSync(userId) {
     const onForeground = () => {
       if (!currentUser?.id) return;
       startCloudSync(currentUser.id);
-      syncFromCloud();
-      flushCloudSave();
+      syncData();
     };
     window.addEventListener("focus", onForeground);
     window.addEventListener("pageshow", onForeground);
@@ -656,8 +674,7 @@ if (cloudStatusEl) {
   cloudStatusEl.style.cursor = "pointer";
   cloudStatusEl.title = "点击立即同步/拉取云端";
   cloudStatusEl.addEventListener("click", () => {
-    syncFromCloud();
-    flushCloudSave();
+    syncData();
   });
 }
 
