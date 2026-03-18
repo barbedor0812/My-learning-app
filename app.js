@@ -30,6 +30,13 @@ function uid(prefix = "id") {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+const CLIENT_ID_KEY = `${STORAGE_KEY}.clientId`;
+let CLIENT_ID = localStorage.getItem(CLIENT_ID_KEY);
+if (!CLIENT_ID) {
+  CLIENT_ID = uid("client");
+  localStorage.setItem(CLIENT_ID_KEY, CLIENT_ID);
+}
+
 function pad2(n) {
   return String(n).padStart(2, "0");
 }
@@ -123,21 +130,141 @@ async function saveToCloud(userId) {
 }
 
 let savingTimer = null;
+let cloudSaveInFlight = null;
+let cloudSaveQueued = false;
+let applyingRemote = false;
+let realtimeChannel = null;
+let cloudPollTimer = null;
+let cloudHooksBound = false;
+
+function withTimeout(promise, ms) {
+  let t = null;
+  return Promise.race([
+    promise,
+    new Promise((_, rej) => {
+      t = setTimeout(() => rej(new Error("timeout")), ms);
+    }),
+  ]).finally(() => {
+    if (t) clearTimeout(t);
+  });
+}
+
+function touchCloudMeta() {
+  if (applyingRemote) return;
+  const cm = state.cloudMeta && typeof state.cloudMeta === "object" ? state.cloudMeta : {};
+  state.cloudMeta = {
+    rev: (Number(cm.rev) || 0) + 1,
+    updatedAt: new Date().toISOString(),
+    updatedBy: CLIENT_ID,
+  };
+}
+
+function shouldApplyRemote(remote) {
+  if (!remote || typeof remote !== "object") return false;
+  const rcm = remote.cloudMeta && typeof remote.cloudMeta === "object" ? remote.cloudMeta : null;
+  const lcm = state.cloudMeta && typeof state.cloudMeta === "object" ? state.cloudMeta : null;
+  const rRev = Number(rcm?.rev) || 0;
+  const lRev = Number(lcm?.rev) || 0;
+  const rBy = String(rcm?.updatedBy || "");
+  if (rBy && rBy === CLIENT_ID) return false;
+  if (rRev > lRev) return true;
+  const rAt = String(rcm?.updatedAt || "");
+  const lAt = String(lcm?.updatedAt || "");
+  return rAt && rAt > lAt;
+}
+
+function applyRemoteState(remote) {
+  applyingRemote = true;
+  state = migrateState(remote);
+  saveState();
+  applyingRemote = false;
+  renderAll();
+}
+
+async function syncFromCloud() {
+  if (!currentUser?.id) return;
+  try {
+    const remote = await loadFromCloud(currentUser.id);
+    if (shouldApplyRemote(remote)) applyRemoteState(remote);
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+function stopCloudSync() {
+  if (realtimeChannel) {
+    try {
+      realtimeChannel.unsubscribe();
+    } catch {}
+    realtimeChannel = null;
+  }
+  if (cloudPollTimer) {
+    clearInterval(cloudPollTimer);
+    cloudPollTimer = null;
+  }
+}
+
+function startCloudSync(userId) {
+  stopCloudSync();
+  if (!supabaseClient) return;
+
+  realtimeChannel = supabaseClient
+    .channel(`app_state_${userId}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "app_state", filter: `user_id=eq.${userId}` },
+      (payload) => {
+        const remote = payload?.new?.data;
+        if (!remote) return;
+        const migrated = migrateState(remote);
+        if (shouldApplyRemote(migrated)) applyRemoteState(migrated);
+      },
+    )
+    .subscribe();
+
+  cloudPollTimer = setInterval(syncFromCloud, 4000);
+
+  if (!cloudHooksBound) {
+    cloudHooksBound = true;
+    window.addEventListener("focus", syncFromCloud);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") syncFromCloud();
+    });
+  }
+}
+
+async function flushCloudSave() {
+  if (!currentUser?.id) return;
+  if (cloudSaveInFlight) {
+    cloudSaveQueued = true;
+    return;
+  }
+
+  cloudSaveInFlight = (async () => {
+    try {
+      setCloudStatus("云端：同步中…", "warn");
+      await withTimeout(saveToCloud(currentUser.id), 10000);
+      setCloudStatus("云端：已同步", "ok");
+    } catch (err) {
+      console.error(err);
+      setCloudStatus("云端：同步失败", "bad");
+    } finally {
+      cloudSaveInFlight = null;
+      if (cloudSaveQueued) {
+        cloudSaveQueued = false;
+        flushCloudSave();
+      }
+    }
+  })();
+}
+
 function scheduleSave() {
+  touchCloudMeta();
   saveState();
   if (savingTimer) clearTimeout(savingTimer);
   savingTimer = setTimeout(async () => {
     savingTimer = null;
-    try {
-      if (currentUser?.id) {
-        setCloudStatus("云端：同步中…", "warn");
-        await saveToCloud(currentUser.id);
-        setCloudStatus("云端：已同步", "ok");
-      }
-    } catch (err) {
-      console.error(err);
-      setCloudStatus("云端：同步失败", "bad");
-    }
+    await flushCloudSave();
   }, 1000);
 }
 
@@ -148,6 +275,7 @@ function saveState() {
 function createInitialState() {
   return {
     version: 2,
+    cloudMeta: { rev: 0, updatedAt: null, updatedBy: null },
     notes: [],
     folders: [],
     reviewTasks: [],
@@ -170,6 +298,10 @@ function migrateState(s) {
   if (!s || typeof s !== "object") return createInitialState();
   const base = createInitialState();
   const out = { ...base, ...s };
+  out.cloudMeta = out.cloudMeta && typeof out.cloudMeta === "object" ? out.cloudMeta : base.cloudMeta;
+  out.cloudMeta.rev = Number(out.cloudMeta.rev) || 0;
+  out.cloudMeta.updatedAt = out.cloudMeta.updatedAt ?? null;
+  out.cloudMeta.updatedBy = out.cloudMeta.updatedBy ?? null;
 
   // ---- Plans (multi-subject) ----
   // Migrate old single plan -> plans[0]
@@ -353,6 +485,7 @@ async function onAuthChanged(session) {
     try {
       state = await loadFromCloud(currentUser.id);
       setCloudStatus("云端：已连接", "ok");
+      startCloudSync(currentUser.id);
     } catch (e) {
       console.error(e);
       setCloudStatus("云端：连接失败", "bad");
@@ -363,6 +496,7 @@ async function onAuthChanged(session) {
     btnSignOutEl.classList.add("hidden");
     accountHintEl.textContent = "未登录：登录后数据会自动同步到云端，不同设备同账号数据一致。";
     setCloudStatus("云端：未登录", "warn");
+    stopCloudSync();
     state = loadState();
   }
   state = migrateState(state);
