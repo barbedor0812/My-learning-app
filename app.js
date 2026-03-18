@@ -144,11 +144,9 @@ let cloudRetryDelayMs = 2000;
 let cloudRetryTick = null;
 let cloudNextRetryAt = null;
 let lastCloudPullErrorAt = 0;
-let authEnsureInFlight = null;
 let lastCloudErrorMsg = "";
 let lastCloudErrorAt = 0;
-let syncInFlight = null;
-let syncQueued = false;
+let cloudQueue = Promise.resolve();
 
 function recordCloudError(err) {
   lastCloudErrorAt = Date.now();
@@ -159,6 +157,39 @@ function recordCloudError(err) {
       cloudStatusEl.title = t ? `点击立即同步/拉取云端\n${t}` : "点击立即同步/拉取云端";
     }
   } catch {}
+}
+
+function isLockBrokenError(err) {
+  const msg = String(err?.message ?? err ?? "");
+  return msg.includes("Lock broken by another request") || msg.includes("lock") && msg.includes("steal");
+}
+
+function delay(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function enqueueCloudTask(taskFn, { lockRetries = 3 } = {}) {
+  const run = async () => {
+    let attempt = 0;
+    while (true) {
+      try {
+        return await taskFn();
+      } catch (e) {
+        if (isLockBrokenError(e) && attempt < lockRetries) {
+          attempt += 1;
+          recordCloudError(e);
+          const backoff = 250 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 200);
+          await delay(backoff);
+          continue;
+        }
+        throw e;
+      }
+    }
+  };
+
+  const p = cloudQueue.then(run, run);
+  cloudQueue = p.catch(() => undefined);
+  return p;
 }
 
 function withTimeout(promise, ms) {
@@ -218,28 +249,20 @@ function needsCloudPush() {
 
 async function ensureAuthSessionFresh() {
   if (!supabaseClient?.auth?.getSession) return;
-  if (authEnsureInFlight) return authEnsureInFlight;
-
-  authEnsureInFlight = (async () => {
-    try {
-      const res = await withTimeout(supabaseClient.auth.getSession(), 8000);
-      const session = res?.data?.session ?? null;
-      if (!session) return;
-      const exp = Number(session.expires_at) || 0;
-      const nowSec = Math.floor(Date.now() / 1000);
-      if (exp > 0 && exp - nowSec <= 90) {
-        if (supabaseClient.auth.refreshSession) {
-          await withTimeout(supabaseClient.auth.refreshSession(), 12000);
-        }
+  try {
+    const res = await withTimeout(supabaseClient.auth.getSession(), 8000);
+    const session = res?.data?.session ?? null;
+    if (!session) return;
+    const exp = Number(session.expires_at) || 0;
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (exp > 0 && exp - nowSec <= 90) {
+      if (supabaseClient.auth.refreshSession) {
+        await withTimeout(supabaseClient.auth.refreshSession(), 12000);
       }
-    } catch (e) {
-      recordCloudError(e);
-    } finally {
-      authEnsureInFlight = null;
     }
-  })();
-
-  return authEnsureInFlight;
+  } catch (e) {
+    recordCloudError(e);
+  }
 }
 
 function setCloudRetryCountdown(ms) {
@@ -301,7 +324,7 @@ function applyRemoteState(remote) {
   renderAll();
 }
 
-async function syncFromCloud() {
+async function syncFromCloudRaw() {
   if (!currentUser?.id) return;
   try {
     await ensureAuthSessionFresh();
@@ -317,27 +340,16 @@ async function syncFromCloud() {
   }
 }
 
+function syncFromCloud() {
+  return enqueueCloudTask(() => syncFromCloudRaw(), { lockRetries: 3 });
+}
+
 function syncData() {
   if (!currentUser?.id) return Promise.resolve();
-  if (syncInFlight) {
-    syncQueued = true;
-    return syncInFlight;
-  }
-
-  syncInFlight = (async () => {
-    try {
-      await syncFromCloud();
-      await flushCloudSave();
-    } finally {
-      syncInFlight = null;
-      if (syncQueued) {
-        syncQueued = false;
-        syncData();
-      }
-    }
-  })();
-
-  return syncInFlight;
+  return enqueueCloudTask(async () => {
+    await syncFromCloudRaw();
+    await flushCloudSaveRaw();
+  });
 }
 
 function stopCloudSync() {
@@ -369,7 +381,7 @@ function startCloudSync(userId) {
   }
 }
 
-async function flushCloudSave() {
+async function flushCloudSaveRaw() {
   if (!currentUser?.id) return;
   if (!needsCloudPush()) return;
   if (cloudSaveInFlight) {
@@ -435,6 +447,10 @@ async function flushCloudSave() {
       }
     }
   })();
+}
+
+function flushCloudSave() {
+  return enqueueCloudTask(() => flushCloudSaveRaw(), { lockRetries: 3 });
 }
 
 function scheduleSave() {
