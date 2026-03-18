@@ -24,6 +24,7 @@ try {
 
 const STORAGE_KEY = "cpaStudyAssistant.v1";
 const CLOUD_PENDING_KEY = `${STORAGE_KEY}.pendingCloud`;
+const CLOUD_PUSHED_KEY = `${STORAGE_KEY}.cloudPushedMeta`;
 
 const EBBINGHAUS_DAYS = [1, 2, 4, 7, 15, 30];
 
@@ -107,6 +108,7 @@ function loadState() {
 
 async function loadFromCloud(userId) {
   if (!supabaseClient) throw new Error("Supabase 未加载");
+  await ensureAuthSessionFresh();
   const { data, error } = await supabaseClient
     .from("app_state")
     .select("data")
@@ -119,6 +121,7 @@ async function loadFromCloud(userId) {
 
 async function saveToCloud(userId) {
   if (!supabaseClient) throw new Error("Supabase 未加载");
+  await ensureAuthSessionFresh();
   const payload = {
     user_id: userId,
     data: state,
@@ -141,6 +144,20 @@ let cloudRetryDelayMs = 2000;
 let cloudRetryTick = null;
 let cloudNextRetryAt = null;
 let lastCloudPullErrorAt = 0;
+let authEnsureInFlight = null;
+let lastCloudErrorMsg = "";
+let lastCloudErrorAt = 0;
+
+function recordCloudError(err) {
+  lastCloudErrorAt = Date.now();
+  lastCloudErrorMsg = String(err?.message ?? err ?? "");
+  try {
+    if (cloudStatusEl) {
+      const t = lastCloudErrorMsg ? `最近错误：${lastCloudErrorMsg}` : "";
+      cloudStatusEl.title = t ? `点击立即同步/拉取云端\n${t}` : "点击立即同步/拉取云端";
+    }
+  } catch {}
+}
 
 function withTimeout(promise, ms) {
   let t = null;
@@ -152,6 +169,75 @@ function withTimeout(promise, ms) {
   ]).finally(() => {
     if (t) clearTimeout(t);
   });
+}
+
+function getCloudPushedMeta() {
+  try {
+    const raw = localStorage.getItem(CLOUD_PUSHED_KEY);
+    if (!raw) return null;
+    const x = JSON.parse(raw);
+    if (!x || typeof x !== "object") return null;
+    return {
+      rev: Number(x.rev) || 0,
+      updatedAt: x.updatedAt ?? null,
+      updatedBy: x.updatedBy ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function setCloudPushedMeta(meta) {
+  try {
+    localStorage.setItem(
+      CLOUD_PUSHED_KEY,
+      JSON.stringify({
+        rev: Number(meta?.rev) || 0,
+        updatedAt: meta?.updatedAt ?? null,
+        updatedBy: meta?.updatedBy ?? null,
+      }),
+    );
+  } catch {}
+}
+
+function needsCloudPush() {
+  if (!currentUser?.id) return false;
+  if (localStorage.getItem(CLOUD_PENDING_KEY)) return true;
+  const pushed = getCloudPushedMeta();
+  const cur = state.cloudMeta && typeof state.cloudMeta === "object" ? state.cloudMeta : null;
+  if (!cur) return false;
+  const curAt = String(cur.updatedAt || "");
+  const curRev = Number(cur.rev) || 0;
+  const pAt = String(pushed?.updatedAt || "");
+  const pRev = Number(pushed?.rev) || 0;
+  if (curAt && pAt && curAt !== pAt) return curAt > pAt;
+  return curRev > pRev;
+}
+
+async function ensureAuthSessionFresh() {
+  if (!supabaseClient?.auth?.getSession) return;
+  if (authEnsureInFlight) return authEnsureInFlight;
+
+  authEnsureInFlight = (async () => {
+    try {
+      const res = await withTimeout(supabaseClient.auth.getSession(), 8000);
+      const session = res?.data?.session ?? null;
+      if (!session) return;
+      const exp = Number(session.expires_at) || 0;
+      const nowSec = Math.floor(Date.now() / 1000);
+      if (exp > 0 && exp - nowSec <= 90) {
+        if (supabaseClient.auth.refreshSession) {
+          await withTimeout(supabaseClient.auth.refreshSession(), 12000);
+        }
+      }
+    } catch (e) {
+      recordCloudError(e);
+    } finally {
+      authEnsureInFlight = null;
+    }
+  })();
+
+  return authEnsureInFlight;
 }
 
 function setCloudRetryCountdown(ms) {
@@ -216,10 +302,16 @@ function applyRemoteState(remote) {
 async function syncFromCloud() {
   if (!currentUser?.id) return;
   try {
+    await ensureAuthSessionFresh();
     const remote = await loadFromCloud(currentUser.id);
     if (shouldApplyRemote(remote)) applyRemoteState(remote);
   } catch (e) {
-    console.error(e);
+    recordCloudError(e);
+    const now = Date.now();
+    if (now - lastCloudPullErrorAt > 60000) {
+      lastCloudPullErrorAt = now;
+      console.error(e);
+    }
   }
 }
 
@@ -261,6 +353,7 @@ function startCloudSync(userId) {
 
 async function flushCloudSave() {
   if (!currentUser?.id) return;
+  if (!needsCloudPush()) return;
   if (cloudSaveInFlight) {
     cloudSaveQueued = true;
     return;
@@ -273,7 +366,7 @@ async function flushCloudSave() {
       localStorage.setItem(CLOUD_PENDING_KEY, snapshot);
 
       try {
-        await withTimeout(saveToCloud(currentUser.id), 30000);
+        await withTimeout(saveToCloud(currentUser.id), 60000);
       } catch (e) {
         if (String(e?.message ?? e) === "timeout") {
           setCloudStatus("云端：同步超时（确认中…）", "warn");
@@ -293,6 +386,7 @@ async function flushCloudSave() {
 
       setCloudStatus("云端：已同步", "ok");
       localStorage.removeItem(CLOUD_PENDING_KEY);
+      setCloudPushedMeta(state.cloudMeta);
       cloudRetryDelayMs = 2000;
       cloudNextRetryAt = null;
       if (cloudRetryTimer) {
@@ -300,7 +394,7 @@ async function flushCloudSave() {
         cloudRetryTimer = null;
       }
     } catch (err) {
-      console.error(err);
+      recordCloudError(err);
       if (!navigator.onLine) {
         setCloudStatus("云端：离线（等待网络恢复）", "bad");
       } else {
