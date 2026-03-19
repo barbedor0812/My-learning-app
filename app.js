@@ -280,6 +280,7 @@ function setCloudRetryCountdown(ms) {
 
 function touchCloudMeta() {
   if (applyingRemote) return;
+  if (!currentUser?.id) return;
   const cm = state.cloudMeta && typeof state.cloudMeta === "object" ? state.cloudMeta : {};
   state.cloudMeta = {
     rev: (Number(cm.rev) || 0) + 1,
@@ -455,6 +456,7 @@ function flushCloudSave() {
 }
 
 function scheduleSave() {
+  if (suppressPersistenceUntilLogin) return;
   touchCloudMeta();
   saveState();
   if (savingTimer) clearTimeout(savingTimer);
@@ -465,6 +467,7 @@ function scheduleSave() {
 }
 
 function saveState() {
+  if (suppressPersistenceUntilLogin) return;
   const HISTORY_KEY = `${STORAGE_KEY}.history`;
   try {
     const prev = localStorage.getItem(STORAGE_KEY);
@@ -662,6 +665,9 @@ const btnAddTagEl = document.getElementById("btnAddTag");
 
 // ---- Cloud / Auth state ----
 let currentUser = null;
+// User-triggered logout must not persist an "empty" state.
+// Otherwise, on next login the empty local state can be treated as newer and overwrite cloud.
+let suppressPersistenceUntilLogin = false;
 const cloudStatusEl = document.getElementById("cloudStatus");
 const btnOpenAccountEl = document.getElementById("btnOpenAccount");
 const accountPanelEl = document.getElementById("accountPanel");
@@ -698,6 +704,7 @@ if (cloudStatusEl) {
 async function onAuthChanged(session) {
   currentUser = session?.user ?? null;
   if (currentUser?.id) {
+    suppressPersistenceUntilLogin = false;
     btnSignOutEl.classList.remove("hidden");
     accountHintEl.textContent = `已登录：${currentUser.email}（数据会自动云端同步）`;
     setCloudStatus("云端：同步中…", "warn");
@@ -785,8 +792,10 @@ if (btnSignOutEl)
   btnSignOutEl.addEventListener("click", async () => {
     authMsgEl.textContent = "";
     try {
+      suppressPersistenceUntilLogin = true;
       await auth.signOut();
     } catch (e) {
+      suppressPersistenceUntilLogin = false;
       authMsgEl.textContent = `退出失败：${String(e?.message ?? e)}`;
     }
   });
