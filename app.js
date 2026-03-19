@@ -1468,10 +1468,6 @@ function isNoteDueToday(noteId) {
   return state.reviewTasks.some((t) => t.noteId === noteId && t.dueDate === iso && !t.completedAt);
 }
 
-function openReview(noteId) {
-  alert(`Reviewing note: ${noteId}`);
-}
-
 function bulkMoveNotes() {
   const ids = [...selectedNoteIds];
   if (ids.length === 0) return alert("请先选择要移动的笔记");

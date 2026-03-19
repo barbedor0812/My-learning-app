@@ -787,7 +787,16 @@ I need to respond in a way that confirms the table and ensure the code utilizes 
 
 - **Realtime 复制开启**：`Database -> Replication` 里把 `app_state` 打开（不然订阅收不到变更）
 - **RLS 策略**：如果 `app_state` 开了 RLS，需要确保：
-  - `select/insert/update` 仅允许 `auth.uid() = user_id
+  - `select/insert/update` 仅允许 `auth.uid() = user_id` 的行
+
+如果你愿意，我可以根据你当前 `app_state` 的 RLS 开关状态，直接给你一份对应的 SQL 策略。
+
+---
+
+_**User**_
+
+我点击页面没有反映了，控制台报错：app.js:1770 Uncaught SyntaxError: Identifier 'openReview' has already been declared
+
 
 ---
 
