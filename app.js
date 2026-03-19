@@ -1,25 +1,12 @@
+import { supabase as supabaseClient } from "./src/lib/supabaseClient.js";
+import { useAuth } from "./src/hooks/useAuth.js";
+import { useDataSync } from "./src/hooks/useDataSync.js";
+
 const pdfjsLib = window.pdfjsLib;
 if (pdfjsLib?.GlobalWorkerOptions) {
   // PDF.js in browsers typically needs an explicit worker URL.
   pdfjsLib.GlobalWorkerOptions.workerSrc =
     new URL("./pdf.worker.min.js", window.location.href).toString();
-}
-
-// ---- Supabase config ----
-const SUPABASE_URL = "https://vwdoqofrfpwyxcqmzynh.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_CbFm6sZSClJ9SJgF_1qgpg_YUqgBq8x";
-
-/** @type {any|null} */
-let supabaseClient = null;
-try {
-  if (window.supabase?.createClient) {
-    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  } else {
-    console.warn("Supabase library not loaded. Check network/CDN.");
-  }
-} catch (e) {
-  console.error("Supabase init failed", e);
-  supabaseClient = null;
 }
 
 const STORAGE_KEY = "cpaStudyAssistant.v1";
@@ -107,7 +94,6 @@ function loadState() {
 }
 
 async function loadFromCloud(userId) {
-  if (!supabaseClient) throw new Error("Supabase 未加载");
   await ensureAuthSessionFresh();
   const { data, error } = await supabaseClient
     .from("app_state")
@@ -120,7 +106,6 @@ async function loadFromCloud(userId) {
 }
 
 async function saveToCloud(userId) {
-  if (!supabaseClient) throw new Error("Supabase 未加载");
   await ensureAuthSessionFresh();
   const payload = {
     user_id: userId,
@@ -132,6 +117,19 @@ async function saveToCloud(userId) {
     .upsert(payload, { onConflict: "user_id" });
   if (error) throw error;
 }
+
+// --- Realtime sync (subscribe to app_state row changes) ---
+const dataSync = useDataSync({
+  table: "app_state",
+  onRemoteChange: (payload) => {
+    // Ignore self-writes; apply the same rules via syncFromCloudRaw.
+    if (!currentUser?.id) return;
+    if (document.visibilityState !== "visible") return;
+    // Debounce by queueing in existing cloudQueue
+    syncFromCloud();
+  },
+  onError: (e) => recordCloudError(e),
+});
 
 let savingTimer = null;
 let cloudSaveInFlight = null;
@@ -357,11 +355,13 @@ function stopCloudSync() {
     clearInterval(cloudPollTimer);
     cloudPollTimer = null;
   }
+  dataSync.dispose();
 }
 
 function startCloudSync(userId) {
   stopCloudSync();
-  if (!supabaseClient) return;
+  // Fallback polling (30s) + realtime subscription
+  dataSync.subscribe(userId).catch((e) => recordCloudError(e));
   cloudPollTimer = setInterval(() => {
     syncData();
   }, 30000);
@@ -371,6 +371,7 @@ function startCloudSync(userId) {
     const onForeground = () => {
       if (!currentUser?.id) return;
       startCloudSync(currentUser.id);
+      dataSync.resubscribeIfNeeded().catch(() => {});
       syncData();
     };
     window.addEventListener("focus", onForeground);
@@ -732,23 +733,27 @@ async function onAuthChanged(session) {
     accountHintEl.textContent = "未登录：登录后数据会自动同步到云端，不同设备同账号数据一致。";
     setCloudStatus("云端：未登录", "warn");
     stopCloudSync();
-    state = loadState();
+    // 登出后：清除当前网页中的所有用户数据（含 localStorage 与内存态）
+    clearUserDataOnSignOut();
+    state = createInitialState();
   }
   state = migrateState(state);
   setRoute(state.ui.lastRoute ?? "today");
   renderAll();
 }
 
-if (supabaseClient) {
-  supabaseClient.auth.onAuthStateChange((_event, session) => onAuthChanged(session));
-  supabaseClient.auth.getSession().then(({ data }) => onAuthChanged(data.session));
-  window.addEventListener("online", () => {
-    if (currentUser?.id) flushCloudSave();
-  });
-  window.addEventListener("offline", () => {
-    setCloudStatus("云端：离线（等待网络恢复）", "bad");
-  });
-}
+const auth = useAuth((session) => onAuthChanged(session));
+auth.bind().catch((e) => console.error(e));
+
+window.addEventListener("online", () => {
+  if (currentUser?.id) {
+    dataSync.resubscribeIfNeeded().catch(() => {});
+    flushCloudSave();
+  }
+});
+window.addEventListener("offline", () => {
+  setCloudStatus("云端：离线（等待网络恢复）", "bad");
+});
 
 if (btnOpenAccountEl) btnOpenAccountEl.addEventListener("click", () => accountPanelEl.classList.remove("hidden"));
 if (btnCloseAccountEl) btnCloseAccountEl.addEventListener("click", () => accountPanelEl.classList.add("hidden"));
@@ -759,7 +764,7 @@ if (btnSignInEl) {
     const email = authEmailEl.value.trim();
     const password = authPasswordEl.value.trim();
     if (!email || !password) return (authMsgEl.textContent = "请输入邮箱和密码");
-    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    const { error } = await auth.signIn({ email, password });
     if (error) authMsgEl.textContent = `登录失败：${error.message}`;
   });
 }
@@ -770,13 +775,38 @@ if (btnSignUpEl) {
     const email = authEmailEl.value.trim();
     const password = authPasswordEl.value.trim();
     if (!email || !password) return (authMsgEl.textContent = "请输入邮箱和密码");
-    const { error } = await supabaseClient.auth.signUp({ email, password });
+    const { error } = await auth.signUp({ email, password });
     if (error) authMsgEl.textContent = `注册失败：${error.message}`;
     else authMsgEl.textContent = "注册成功，请去邮箱验证（如果开启了验证）或直接登录。";
   });
 }
 
-if (btnSignOutEl) btnSignOutEl.addEventListener("click", () => supabaseClient.auth.signOut());
+if (btnSignOutEl)
+  btnSignOutEl.addEventListener("click", async () => {
+    authMsgEl.textContent = "";
+    try {
+      await auth.signOut();
+    } catch (e) {
+      authMsgEl.textContent = `退出失败：${String(e?.message ?? e)}`;
+    }
+  });
+
+function clearUserDataOnSignOut() {
+  try {
+    // Clear app state related keys only.
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k) continue;
+      if (k === STORAGE_KEY) keys.push(k);
+      else if (k.startsWith(`${STORAGE_KEY}.`)) keys.push(k);
+    }
+    for (const k of keys) localStorage.removeItem(k);
+  } catch {}
+  try {
+    stopCloudSync();
+  } catch {}
+}
 
 let editorDirty = false;
 let editorAutoSaveTimer = null;
@@ -1547,14 +1577,6 @@ function renderNotesList() {
       updateBulkActionUI();
     });
   });
-}
-
-function renderAll() {
-  renderToday();
-  renderNotes();
-  renderPlan();
-  renderStats();
-  updateBulkActionUI();
 }
 
 function updateBulkActionUI() {

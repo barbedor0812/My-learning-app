@@ -1,0 +1,209 @@
+学习助手 App 云端同步问题修复与优化需求文档（不使用环境变量版，含具体 Supabase 配置）
+1. 项目概述
+项目名称：学习助手 App（Web 应用）
+
+技术栈：前端（JAVA或其他框架），后端服务使用 Supabase（云端数据库、身份认证、实时同步）
+
+目标：修复当前应用中的云端数据同步报错问题，优化代码结构，实现稳定可靠的跨设备数据同步功能。
+
+2. 当前问题
+2.1 现象
+在浏览器控制台出现云端数据同步报错:
+My-learning-app/:1 Tracking Prevention blocked access to storage for https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.
+My-learning-app/:1 Tracking Prevention blocked access to storage for https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.
+My-learning-app/:1 Tracking Prevention blocked access to storage for https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.
+My-learning-app/:1 Tracking Prevention blocked access to storage for https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.
+2
+supabase.js:20 @supabase/gotrue-js: Lock "lock:sb-vwdoqofrfpwyxcqmzynh-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover.
+pr	@	supabase.js:20
+
+补充背景：在多个代码版本更新中间，我更新了Github的仓库名称，导致pages地址有所变化，Supabase 最新认证 URL 为：https://vwdoqofrfpwyxcqmzynh.supabase.co。
+
+同步功能不稳定，登录状态下数据可能无法正确同步至其他设备，手机网页以及电脑切屏后云同步一直报错，登出后重新登录有时无法恢复数据。
+
+2.2 可能原因分析
+2.2.1硬编码配置：Supabase 客户端初始化时可能使用了旧的 URL，且分散在代码各处，导致 URL 变更后未能统一更新，造成认证或 API 请求失败。
+
+2.2.2认证状态管理不当：未正确维持会话，或登出后未完全清除本地缓存，导致数据冲突。
+
+2.2.3实时同步机制缺失：未使用 Supabase 的实时订阅功能，或连接在切屏/后台时断开未恢复。
+
+2.2.4代码冗余：存在重复的认证/数据获取逻辑，缺乏模块化，导致维护困难。
+
+3. 功能需求
+3.1 多端数据同步
+用户在同一账号下，通过不同设备（如手机浏览器、电脑浏览器）登录时，数据应实时保持一致。
+
+任何一端的数据变更（增、删、改）应立即反映到其他已登录的客户端。
+
+3.2 登录/登出行为
+登录后：自动从 Supabase 拉取该用户的最新数据并显示；若本地有旧缓存，应先清除再加载云端数据，且有数据版本比较逻辑，从云端拉取数据之前，先比较本地版本和云端版本哪个更新，
+如果本地版本更新，则自动将最新本地版本数据上传云端同步，保证用户数据是最新的，不无脑云端数据覆盖。
+
+登出后：清除当前网页中的所有用户数据（包括内存和 localStorage 中的状态），确保下一位登录用户不会看到前一位用户的数据。
+
+重新登录：同账号再次登录时，应重新拉取云端数据，恢复之前的内容。
+
+3.3 切屏/后台恢复
+用户切换浏览器标签页、最小化浏览器或手机浏览器切到后台再返回时，应用应能自动恢复云端同步连接，不丢失数据，无需手动刷新。
+
+网络短暂中断后重连，同步应自动恢复。
+
+4. 技术约束与配置要求
+4.1 Supabase 具体配置
+以下为关键配置：
+
+Project URL (Supabase URL): https://vwdoqofrfpwyxcqmzynh.supabase.co
+
+Publishable Key (anon key): sb_publishable_CbFm6sZSClJ9SJgF_1qgpg_YUqgBq8x
+
+Site URL (用于认证重定向): https://barbedor0812.github.io/My-learning-app/
+
+Redirect URLs (允许的重定向地址):
+
+https://barbedor0812.github.io
+
+https://barbedor0812.github.io/My-learning-app/
+
+重要说明：
+
+以上配置为简化部署和修改，将直接写在代码的配置文件中（src/config/supabase.js），集中管理，避免分散在多个文件中。未来若项目 URL 或 key 变更，只需修改此文件。
+
+在 Supabase 控制台中，请确保已将上述 Site URL 和 Redirect URLs 正确添加到 Authentication > URL Configuration 中，以确保 OAuth 或邮箱登录能正确跳转。
+
+4.2 数据库表结构
+假设用户数据存储于 user_data 表，建议结构如下（可根据实际需求调整字段）：
+
+sql
+CREATE TABLE user_data (
+  id BIGSERIAL PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  content JSONB NOT NULL,  -- 存储具体的学习内容，格式灵活
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 索引优化查询
+CREATE INDEX idx_user_data_user_id ON user_data(user_id);
+实时功能启用：需在 Supabase 控制台的 Database > Replication 中为 user_data 表开启复制（Replication），以便实时订阅生效。
+
+4.3 前端代码要求
+使用 Supabase JavaScript SDK（v2 版本）进行客户端初始化、认证和实时订阅。
+
+采用 React Hooks（或你根据目前现有的其他框架的等效方式）封装认证逻辑和数据同步逻辑，提高代码复用性。
+
+确保在页面可见性变化时（如切屏）能主动恢复实时连接。
+
+5. 代码修改具体要求
+5.1 消除代码冗余
+移除重复的 Supabase 客户端初始化代码，统一在一个模块（如 src/lib/supabaseClient.js）中初始化，并从配置文件中读取 URL 和 key。
+
+合并多处认证状态监听逻辑，使用自定义 Hook（如 useAuth）集中管理。
+
+合并多处数据获取和更新逻辑，使用自定义 Hook（如 useDataSync）封装。
+
+5.2 修复 Bug
+URL 变更问题：将所有硬编码的 Supabase URL 和 anon key 统一放置到 src/config/supabase.js 中，其他地方通过导入使用。这样，未来修改仓库名称或项目配置时，只需修改这一个文件即可。
+
+登出数据残留：登出时确保清空本地状态（如 React 组件状态、缓存），并取消实时订阅。
+
+切屏同步中断：监听 visibilitychange 事件，在页面恢复可见时重新订阅实时频道（Supabase 客户端通常会自动重连，但可增加主动重连逻辑以增强可靠性）。
+
+错误处理：对 Supabase API 调用进行错误捕获，并在控制台输出有意义的错误信息，便于调试。
+
+5.3 代码结构清晰
+创建 src/config/supabase.js：集中存放 Supabase URL 和 anon key。
+
+javascript
+// src/config/supabase.js
+export const SUPABASE_URL = 'https://vwdoqofrfpwyxcqmzynh.supabase.co';
+export const SUPABASE_ANON_KEY = 'sb_publishable_CbFm6sZSClJ9SJgF_1qgpg_YUqgBq8x';
+创建 src/lib/supabaseClient.js：引入配置，初始化 Supabase 客户端并导出。
+
+javascript
+// src/lib/supabaseClient.js
+import { createClient } from '@supabase/supabase-js';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config/supabase';
+
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
+  },
+});
+创建 src/hooks/useAuth.js：封装登录、登出、注册和用户状态。
+
+创建 src/hooks/useDataSync.js：封装数据加载、实时订阅、数据更新。
+
+业务组件中只调用这些 Hooks，不直接操作 Supabase。
+
+添加详细的代码注释，解释关键函数、参数和实现意图。
+
+6. 实施步骤（供 AI 参考）
+创建配置文件：
+
+新建 src/config/supabase.js，写入上述 Supabase URL 和 anon key。
+
+重构 Supabase 客户端：
+
+创建 src/lib/supabaseClient.js，导入配置并使用 createClient 初始化，导出 supabase 实例。
+
+删除所有分散的初始化代码，统一使用该实例。
+
+重构认证模块：
+
+创建 useAuth Hook，使用 supabase.auth.getSession() 和 onAuthStateChange 管理用户状态。
+
+提供 signIn, signUp, signOut 方法。
+
+重构数据同步模块：
+
+创建 useDataSync Hook，接收当前用户 ID。
+
+在用户登录时获取数据并设置实时订阅。
+
+在用户登出时取消订阅并清空本地数据。
+
+实现数据更新函数（如 addOrUpdateData），调用 Supabase 的 upsert 操作。
+
+处理切屏/后台恢复：
+
+在应用根组件中添加 visibilitychange 监听，当页面变为可见时，遍历所有 Supabase 频道并重新订阅已关闭的频道。
+
+清理冗余代码：
+
+删除旧的认证/数据获取逻辑，替换为新 Hooks。
+
+检查并移除未使用的变量、导入和组件。
+
+添加注释：
+
+为每个函数、复杂的逻辑块添加 JSDoc 或行内注释，解释其作用和实现原理。
+
+7. 测试验收标准
+登录同步测试：在设备 A 登录账号，添加一条数据；在设备 B 登录同一账号，应立即看到新数据。
+
+数据变更同步：在设备 A 修改数据，设备 B 应自动更新。
+
+登出清除测试：登录后登出，刷新页面，不应看到任何用户数据；重新登录后数据恢复。
+
+切屏恢复测试：在设备 A 打开应用，切换到其他标签页一段时间后返回，继续操作数据，设备 B 应能收到更新。
+
+错误处理测试：故意断开网络，然后重连，观察同步是否恢复；控制台不应出现未捕获的致命错误。
+
+配置修改测试：手动修改 src/config/supabase.js 中的 URL 为无效值，应用应能提示错误而不是挂起；恢复正确值后应正常工作。
+
+8. 提交要求
+修改后的代码应提交到指定分支（如 fix/sync-issue）。
+
+提交信息清晰，如“修复云端同步问题，重构认证与数据同步模块”。
+
+附上必要的注释和 README 更新（说明如何修改 Supabase 配置）。
+
+请根据以上需求文档，对现有代码进行修改和优化。如有疑问，请及时沟通。

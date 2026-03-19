@@ -1,10 +1,15 @@
 // Bump this when core files change to avoid old-cache issues.
-const CACHE_NAME = "cpa-study-assistant-pwa-v23";
+const CACHE_NAME = "cpa-study-assistant-pwa-v27";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
+  "./src/config/supabase.js",
+  "./src/lib/storage.js",
+  "./src/lib/supabaseClient.js",
+  "./src/hooks/useAuth.js",
+  "./src/hooks/useDataSync.js",
   "./manifest.webmanifest",
   "./pdf.min.js",
   "./pdf.worker.min.js",
