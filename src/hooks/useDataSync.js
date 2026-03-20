@@ -6,6 +6,7 @@ import { supabase } from "../lib/supabaseClient.js";
  * - Loads user state from Supabase (table: app_state, keyed by user_id)
  * - Subscribes to realtime changes and calls back with a reload signal
  * - Provides save(upsert) helper
+ * - 回调中仅应刷新数据，不应驱动路由/折叠等 UI（由 app.js 合并策略保证）
  *
  * @param {{
  *  table?: string,

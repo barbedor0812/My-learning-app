@@ -2956,7 +2956,835 @@ function onAuthPasswordKeydown(e) {
   else btnSignInEl?.click();
 }
 ```
-Remove duplicate from email tha</details></think>
+Remove duplicate from email that triggers signin - keep email enter -> signin
+
+5. btnSaveNote - noteTitle already saves on enter
+
+6. Special rule prompt uses prompt() - skip
+
+Let me also add Enter on pdfExtractedText - not standard
+
+I'll add README line for Shift+Enter register - optional small hint in HTML near auth buttons.
+
+Actually re-read user message - they want Enter for more scenarios, not necessarily shift. I'll add explicit Enter on signup flow: we could use two handlers - when user clicks Sign Up focus chain - simpler add small text "回车登录" and for register add listener to authPassword: only one primary action per field is standard - many sites use Enter = submit primary form action. Here primary is login. For sign up, user could use Tab to Sign Up and Space - or I add a second line "Shift+Enter 注册".
+
+Implement shift+enter for sign up.
+
+7. notesSearch Enter -> prevent default, renderNotesList() is already live on input - just blur to dismiss keyboard on mobile
+
+Let me implement all file edits.
+</details></think>
+
+---
+
+
+正在实现：将排序改为 Apple 风格分段控件、优化筛选下拉与移动端工具栏布局、加强笔记列表滚动区在移动端的可用性、收紧填空行高，并补齐多处回车提交逻辑。
+
+
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\index.html</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\index.html</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+
+Now styles.css - add notesToolbar, segmented, notesFilterSelect, sr-only, mobile notesListScroll, blank input tightening
+
+Then app.js - remove notesSortOrderEl, add syncNotesSortUI, segmented listeners, update renderNotesList, auth password handler with shift+enter, daily task function, note title enter, plan enter, bump sw.js
+</details></think>
+
+---
+
+
+
+
+
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\styles.css</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\styles.css</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+
+Duplicate .blank rules might exist later in file - grep
+</details></think>
+
+---
+
+
+
+
+
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="ripgrep_raw_search">
+<details>
+<summary>Tool use: **ripgrep_raw_search**</summary>
+
+
+Parameters:
+
+```json
+{
+  "pattern": "\\.blank",
+  "path": "d:\\CPA学习助手\\styles.css",
+  "outputMode": "content",
+  "caseInsensitive": false
+}
+```
+Additional data:
+
+```json
+{
+  "isPruned": true,
+  "pattern": "\\.blank",
+  "path": "d:\\CPA学习助手\\styles.css",
+  "outputMode": "content",
+  "totalFiles": 1,
+  "totalMatches": 9,
+  "topFiles": [
+    {
+      "uri": "styles.css",
+      "matchCount": 9
+    }
+  ]
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+
+Good single block. Read .blank{ earlier block at 488 - the read showed 501 - might be one file. Let me read 600-690 to see order - we have .review .blank after .blank input which might override .blank padding - good.
+
+sw.js bump version
+
+app.js:
+- Remove const notesSortOrderEl
+- Add function syncNotesSortSegmented()
+- In renderNotesList: call syncNotesSortSegmented() instead of notesSortOrderEl.value
+- Replace notesSortOrderEl addEventListener with:
+```javascript
+document.querySelectorAll("[data-notes-sort]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    state.ui.notesSortOrder = btn.dataset.notesSort === "desc" ? "desc" : "asc";
+    syncNotesSortSegmented();
+    scheduleSave();
+    renderNotesList();
+  });
+});
+```
+- On first load after state, call syncNotesSortSegmented() once
+
+- auth password keydown: merge with existing - remove separate email/password signin only, use:
+```javascript
+function submitAuthByEnter(e) {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  if (e.shiftKey) btnSignUpEl?.click();
+  else btnSignInEl?.click();
+}
+authEmailEl?.addEventListener("keydown", submitAuthByEnter);
+authPasswordEl?.addEventListener("keydown", submitAuthByEnter);
+```
+Remove the old duplicate listeners that only did sign in
+
+- addDailyTaskFromInput + Enter
+
+- noteTitleEl keydown Enter
+
+- plan fields + btnGeneratePlan - read line 2405
+</details></think>
+
+---
+
+
+
+
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: d:\CPA学习助手\app.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: d:\CPA学习助手\app.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: d:\CPA学习助手\sw.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+
+I'll extract generate plan click to named function `runGeneratePlan()` and attach both click and keydown on plan fields.
+
+Actually simpler: add keydown on planSubjectEl, planTotalHoursEl, planDueDateEl, planDailyHoursEl that triggers document.getElementById("btnGeneratePlan").click() - but generate might run on every enter which could be heavy - user asked for it - OK.
+
+Or only trigger on Enter from dueDate/dailyHours - doc says "更多输入场景" - I'll add to all four inputs.
+
+For noteTitle - Enter saveEditor
+
+notesSearch - Enter: e.preventDefault(); notesSearchEl.blur(); renderNotesList(); - already filtered on input
+
+Refactor btnGeneratePlan to share logic:
+
+</details></think>
+
+---
+
+
+
+
+
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\app.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\app.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+
+Add syncNotesSortSegmented after state helpers - before renderNotesList or near notes filter
+
+Add:
+```javascript
+function syncNotesSortSegmented() {
+  const order = state.ui.notesSortOrder === "desc" ? "desc" : "asc";
+  document.querySelectorAll("[data-notes-sort]").forEach((btn) => {
+    btn.classList.toggle("is-active", btn.dataset.notesSort === order);
+  });
+}
+```
+
+In renderNotesList remove notesSortOrderEl lines, add syncNotesSortSegmented()
+
+Replace notesSortOrderEl addEventListener with loop
+
+At boot after renderAll or end of notes section init, syncNotesSortSegmented()
+
+noteTitle keydown after noteTitle input listener
+
+addDailyTask refactor
+
+plan generate refactor - read exact block to replace with function runGeneratePlanClick
+
+notesSearch keydown
+</details></think>
+
+---
+
+
+
+
+
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\app.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\app.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\app.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+
+noteTitleEl add keydown after input listener
+
+addDailyTask function + replace click handler
+
+plan - extract runGeneratePlan and add keydown listeners
+
+Let me do noteTitle and daily and plan
+</details></think>
+
+---
+
+
+
+
+
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\app.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\app.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\app.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+
+planSubjectEl etc. might be declared after the listener - in JS const is temporal dead zone until line runs - I'm adding listeners after plan constants - need to check order. runGeneratePlanFromForm uses planSubjectEl - those are defined earlier around 2296. My new code is after btnGeneratePlan - planSubjectEl already exists. Good.
+
+But wait - I'm inserting plan listeners right after btnGeneratePlan - need to verify planSubjectEl is in scope at that point in file.
+
+grep planSubjectEl definition line vs btnGeneratePlan
+</details></think>
+
+---
+
+
+
+
+
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="ripgrep_raw_search">
+<details>
+<summary>Tool use: **ripgrep_raw_search**</summary>
+
+
+Parameters:
+
+```json
+{
+  "pattern": "planSubjectEl|btnGeneratePlan",
+  "path": "d:\\CPA学习助手\\app.js",
+  "outputMode": "content",
+  "caseInsensitive": false
+}
+```
+Additional data:
+
+```json
+{
+  "isPruned": true,
+  "pattern": "planSubjectEl|btnGeneratePlan",
+  "path": "d:\\CPA学习助手\\app.js",
+  "outputMode": "content",
+  "totalFiles": 1,
+  "totalMatches": 5,
+  "topFiles": [
+    {
+      "uri": "app.js",
+      "matchCount": 5
+    }
+  ]
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+
+onPlanFieldEnter is used before definition - in JS function declarations are hoisted but const onPlanFieldEnter is not - I used function onPlanFieldEnter(e) which IS hoisted. Good.
+
+Actually I wrote:
+```
+function runGeneratePlanFromForm() { ... }
+
+document.getElementById("btnGeneratePlan")...
+function onPlanFieldEnter(e) { ... }
+planSubjectEl?.addEventListener...
+```
+
+function onPlanFieldEnter is hoisted to top of scope - good.
+
+Read lints - check duplicate runGeneratePlan - maybe I left old code - read file around 2405
+</details></think>
+
+---
+
+
+
+
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: d:\CPA学习助手\app.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+
+`function onPlanFieldEnter` after addEventListener - in JS function declarations are hoisted to the top of the block, so it's fine when addEventListener runs at parse... actually at runtime the whole script runs top to bottom. When line 2453 runs, onPlanFieldEnter is already defined because function declarations are hoisted within the module scope. Good.
+
+Actually in ES modules, function declarations are hoisted to the top of the module. Good.
+
+bump sw.js v28
+
+Ensure .tree doesn't have overflow hidden that clips notesListScroll on mobile - grep tree overflow
+</details></think>
+
+---
+
+
+
+
+
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="ripgrep_raw_search">
+<details>
+<summary>Tool use: **ripgrep_raw_search**</summary>
+
+
+Parameters:
+
+```json
+{
+  "pattern": "overflow",
+  "path": "d:\\CPA学习助手\\styles.css",
+  "glob": "*.css",
+  "caseInsensitive": false
+}
+```
+Additional data:
+
+```json
+{
+  "isPruned": true,
+  "pattern": "overflow",
+  "path": "d:\\CPA学习助手\\styles.css",
+  "outputMode": "content",
+  "totalFiles": 1,
+  "totalMatches": 11,
+  "topFiles": [
+    {
+      "uri": "styles.css",
+      "matchCount": 11
+    }
+  ]
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+
+`.notesToolbar__filters` on very small screens - segmented might still truncate "数字升序" - we use nowrap - on narrow screens two Chinese words might overflow - allow wrap on super small:
+
+```css
+@media (max-width: 360px){
+  .notesSortSegmented{ flex-wrap: wrap; }
+  .notesSortSegmented__btn{ min-width: 0; white-space: normal; font-size: 13px; line-height: 1.2; }
+}
+```
+
+Add to styles
+
+Also .container width min(1000px, 94vw) - good
+
+Read .blank around 618 - there might be duplicate .review .blank that conflicts - read file
+</details></think>
+
+---
+
+
+
+
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: d:\CPA学习助手\styles.css</summary>
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+
+The .blank has padding 4px 8px from first block - .review .blank overrides padding to 0 2px - good reduces vertical.
+
+Reduce .blank default padding for review - we have .review .blank - also reduce gap in .blank from 6px to 2px for review only:
+
+```css
+.review .blank{
+  padding: 0 2px;
+  margin: 0 1px;
+  gap: 2px;
+}
+```
+
+Update
+
+For input - iOS Safari sometimes ignores height on input - add font-size 14px explicit on .review .blank input to match .review
+
+```css
+.review .blank input{
+  font-size: 14px;
+  line-height: 1.1;
+  height: 1.15em;
+}
+```
+
+Add media query for narrow screens on segmented
+
+strReplace sw.js CACHE v28
+
+grep notesSortOrder in codebase
+</details></think>
+
+---
+
+
+
+
+
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\styles.css</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\sw.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+
+split viewNotes section .grid.grid--2 - on mobile both columns stack - notes list should still have notesListScroll. User said mobile doesn't have scroll - maybe they use GitHub pages old cache? SW bump helps.
+
+Another issue: `min-height: 220px` with empty list shows empty area - OK.
+
+Verify dailyTaskInputEl defined before use in addDailyTask - the order: dailyTaskInputEl is const at 2554, addDailyTask at 2570+ - listeners added after const - I added addDailyTaskFromInput AFTER dailyTaskInputEl definition - need to grep - my patch replaced btnAddDailyTask block which is AFTER dailyTaskInputEl const - good.
+
+Read where dailyTaskInputEl is - line 2554, my new code is after - good.
+
+Read lints
+
+Double-check: first .blank block at 488 area - might still have old styles - read 480-520
+</details></think>
+
+---
+
+
+
+
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: d:\CPA学习助手\styles.css</summary>
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+
+No duplicate blank in earlier part - good.
+
+README update optional - skip
+
+Final: ensure grid card containing notes doesn't use overflow:hidden - read .card
+</details></think>
+
+---
+
+
+
+
+
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="ripgrep_raw_search">
+<details>
+<summary>Tool use: **ripgrep_raw_search**</summary>
+
+
+Parameters:
+
+```json
+{
+  "pattern": "\\.card\\{",
+  "path": "d:\\CPA学习助手\\styles.css",
+  "outputMode": "content",
+  "contextAfter": 8,
+  "caseInsensitive": false
+}
+```
+Additional data:
+
+```json
+{
+  "isPruned": true,
+  "pattern": "\\.card\\{",
+  "path": "d:\\CPA学习助手\\styles.css",
+  "outputMode": "content",
+  "totalFiles": 1,
+  "totalMatches": 1,
+  "topFiles": [
+    {
+      "uri": "styles.css",
+      "matchCount": 9
+    }
+  ]
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+
+No overflow hidden on card
+
+Read lints for app.js index styles sw
+</details></think>
+
+---
+
+
+
+
+
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="read_lints">
+<details>
+<summary>Tool use: **read_lints**</summary>
+
+
+Parameters:
+
+```json
+{
+  "paths": [
+    "d:/CPA学习助手/app.js",
+    "d:/CPA学习助手/index.html",
+    "d:/CPA学习助手/styles.css"
+  ]
+}
+```
+Result:
+
+```json
+{
+  "linterErrorsByFile": [
+    {
+      "relativeWorkspacePath": "d:/CPA学习助手/app.js"
+    },
+    {
+      "relativeWorkspacePath": "d:/CPA学习助手/index.html"
+    },
+    {
+      "relativeWorkspacePath": "d:/CPA学习助手/styles.css"
+    }
+  ]
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+
+Provide summary for user in Chinese
+
+Also fix: duplicate syncNotesSortSegmented() call at module load - we call it after wiring buttons AND inside renderNotesList - the bare `syncNotesSortSegmented();` after forEach - good for initial paint.
+
+If notesSort buttons don't exist (old cached html) querySelectorAll returns empty - safe
+
+Remove any reference to notesSortOrder id in docs? README - skip
+
+User asked folder sort on mobile - we use same UI for all - good
+
+Consider: `.notesToolbar__filters` flex column on mobile means sort is full width segmented + full width select - both visible - good
+</details></think>
+
+---
+
+
+已按你的 4 点做完，摘要如下：
+
+### 1. 排序 + 筛选控件（Apple 风格、文字完整）
+- 用 **分段控件** 替代原来的「排序」下拉：`数字升序` / `数字降序` 各占一半，灰底胶囊 + 选中白底阴影，字体 **14px、半粗**，小屏可自动换行（≤380px）。
+- 「今日需复习 / 已学 / 未学」改为 **`notesFilterSelect`**：全宽、**最小高度 44px**、**15px** 字号、自定义下拉箭头，选项文案改为「全部笔记」等，避免被裁切。
+- **工具栏整体改版** `notesToolbar`：先 **搜索独占一行**，下面 **排序 + 筛选纵向堆叠**；宽度 ≥640px 时再横排，桌面与手机同一套结构，避免手机端挤没排序。
+
+### 2. 复习填空行高
+- `.blank input` 与 **`.review .blank input`** 单独收紧：**line-height 1.1～1.15**，**height / max-height ~1.1–1.2em**，**左右 padding 仍为 0 4px**。
+- `.review .blank` 减小 **padding / gap**，外框更扁，整体更接近正文行高。
+
+### 3. 手机端与桌面拉齐
+- 笔记列表 **`notesListScroll`**：`min-height` + **`max-height: min(52dvh, 380px)`**，**`-webkit-overflow-scrolling: touch`**，保证手机上有固定可视区域和独立滚动。
+- 排序、筛选与搜索 **不再挤在同一行**，手机端也能完整使用排序与滚动列表。
+
+### 4. 回车提交（补充场景）
+- **账号**：`Enter` → 登录；**`Shift+Enter`** → 注册（并在账号区加了简短说明）。
+- **笔记标题**：`Enter` → 保存笔记（`saveEditor`）。
+- **今日打卡任务输入框**：`Enter` → 同「添加」按钮。
+- **学习计划** 科目/总学时/日期/每日学时：`Enter` → 同「生成计划」。
+- **笔记搜索框**：`Enter` → 刷新列表并收起键盘（`blur`）。
+
+### 其它
+- **PWA 缓存** `sw.js` 已 bump 到 **v28**，避免旧缓存看不到新 HTML/CSS。
+
+请手机端 **强制刷新或清一次站点缓存** 后再看笔记页；若仍有某机型滚动异常，告诉我机型与浏览器版本即可再针对性调 `max-height`。
+
+---
+
+_**User**_
+
+我更新了@cursor.txt ，里面有了新需求，请根据该文档更新进行优化。
 
 ---
 

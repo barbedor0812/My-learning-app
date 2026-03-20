@@ -93,6 +93,7 @@ function loadState() {
   }
 }
 
+/** 云端行 migrate 结果（不含本机 UI 合并） */
 async function loadFromCloud(userId) {
   await ensureAuthSessionFresh();
   const { data, error } = await supabaseClient
@@ -101,15 +102,64 @@ async function loadFromCloud(userId) {
     .eq("user_id", userId)
     .maybeSingle();
   if (error) throw error;
-  if (!data) return createInitialState();
+  if (!data?.data) return createInitialState();
   return migrateState(data.data);
+}
+
+/**
+ * v2.0：仅同步学习核心数据 + 笔记排序；不上传路由/文件夹展开/当前笔记等 UI。
+ */
+function buildStateForCloud(src) {
+  const m = migrateState(src);
+  return {
+    version: m.version,
+    cloudMeta: m.cloudMeta,
+    notes: m.notes,
+    folders: m.folders,
+    reviewTasks: m.reviewTasks,
+    plans: m.plans,
+    dayLog: m.dayLog,
+    studyLog: m.studyLog,
+    ui: {
+      notesSortOrder: m.ui.notesSortOrder === "desc" ? "desc" : "asc",
+    },
+  };
+}
+
+function snapshotLocalOnlyUi(ui) {
+  const u = ui && typeof ui === "object" ? ui : {};
+  return {
+    lastRoute: u.lastRoute ?? "today",
+    activeNoteId: u.activeNoteId ?? null,
+    activeFolderId: u.activeFolderId ?? "all",
+    activePlanId: u.activePlanId ?? null,
+    calendarYM: u.calendarYM ?? null,
+    expandedFolderIds: Array.isArray(u.expandedFolderIds) ? [...u.expandedFolderIds] : [],
+    editorShowClozeHighlight: u.editorShowClozeHighlight !== false,
+  };
+}
+
+/** 合并云端数据到本机：保留本设备导航/UI，同步远程排序偏好 */
+function mergeRemoteCorePreserveLocalUi(localState, remoteMigrated) {
+  const localUi = snapshotLocalOnlyUi(localState.ui);
+  const base = migrateState(remoteMigrated);
+  const rso = remoteMigrated?.ui?.notesSortOrder;
+  base.ui = {
+    ...base.ui,
+    ...localUi,
+    notesSortOrder: rso === "desc" || rso === "asc" ? rso : base.ui.notesSortOrder === "desc" ? "desc" : "asc",
+  };
+  if (!base.plans?.some((p) => p.id === base.ui.activePlanId)) {
+    base.ui.activePlanId = base.plans?.[0]?.id ?? null;
+  }
+  return base;
 }
 
 async function saveToCloud(userId) {
   await ensureAuthSessionFresh();
   const payload = {
     user_id: userId,
-    data: state,
+    data: buildStateForCloud(state),
     updated_at: new Date().toISOString(),
   };
   const { error } = await supabaseClient
@@ -315,9 +365,9 @@ function isStateNewer(a, b) {
   return false;
 }
 
-function applyRemoteState(remote) {
+function applyRemoteState(remoteMigrated) {
   applyingRemote = true;
-  state = migrateState(remote);
+  state = mergeRemoteCorePreserveLocalUi(state, remoteMigrated);
   saveState();
   applyingRemote = false;
   renderAll();
@@ -466,6 +516,12 @@ function scheduleSave() {
   }, 1000);
 }
 
+/** 仅写本地：路由/展开/当前页等 UI，不触发云端写入 */
+function scheduleSaveLocal() {
+  if (suppressPersistenceUntilLogin) return;
+  saveState();
+}
+
 function saveState() {
   if (suppressPersistenceUntilLogin) return;
   const HISTORY_KEY = `${STORAGE_KEY}.history`;
@@ -550,7 +606,11 @@ function migrateState(s) {
     }));
   }
 
-  out.ui = out.ui && typeof out.ui === "object" ? out.ui : base.ui;
+  // 云端可能只带部分 ui（如仅 notesSortOrder），与默认合并避免丢字段
+  out.ui = {
+    ...base.ui,
+    ...(s.ui && typeof s.ui === "object" ? s.ui : {}),
+  };
   out.ui.activePlanId = out.ui.activePlanId ?? out.plans[0]?.id ?? null;
 
   // folders (v2) - Initial folders removed as requested
@@ -589,7 +649,7 @@ function setRoute(route) {
   for (const t of tabs) t.classList.toggle("is-active", t.dataset.route === route);
   for (const v of views) v.classList.toggle("is-active", v.dataset.view === route);
   state.ui.lastRoute = route;
-  scheduleSave();
+  scheduleSaveLocal();
   renderAll();
 }
 
@@ -714,11 +774,10 @@ async function onAuthChanged(session) {
     setCloudStatus("云端：同步中…", "warn");
     try {
       const localBefore = loadState();
-      const remoteLoaded = await loadFromCloud(currentUser.id);
-
-      const remoteIsNewer = isStateNewer(remoteLoaded, localBefore);
+      const remoteMigrated = await loadFromCloud(currentUser.id);
+      const remoteIsNewer = isStateNewer(remoteMigrated, localBefore);
       if (remoteIsNewer) {
-        state = remoteLoaded;
+        state = mergeRemoteCorePreserveLocalUi(localBefore, remoteMigrated);
       } else {
         state = localBefore;
       }
@@ -749,7 +808,12 @@ async function onAuthChanged(session) {
     state = createInitialState();
   }
   state = migrateState(state);
-  setRoute(state.ui.lastRoute ?? "today");
+  {
+    const r = state.ui.lastRoute ?? "today";
+    for (const t of tabs) t.classList.toggle("is-active", t.dataset.route === r);
+    for (const v of views) v.classList.toggle("is-active", v.dataset.view === r);
+  }
+  saveState();
   renderAll();
 }
 
@@ -957,7 +1021,7 @@ function getActiveFolderId() {
 
 function setActiveFolderId(id) {
   state.ui.activeFolderId = id ?? "all";
-  scheduleSave();
+  scheduleSaveLocal();
   renderNotes();
 }
 
@@ -1006,7 +1070,7 @@ function setFolderExpanded(id, expanded) {
   if (expanded) cur.add(id);
   else cur.delete(id);
   state.ui.expandedFolderIds = [...cur];
-  scheduleSave();
+  scheduleSaveLocal();
 }
 
 function getFolderDisplayName(id) {
@@ -1137,14 +1201,14 @@ function openEditor(noteId) {
   btnToggleClozeHighlightEl && (btnToggleClozeHighlightEl.textContent = `挖空高亮：${editorShowClozeHighlight ? "开" : "关"}`);
   renderTagsEditor(note);
   renderNotePreview(note);
-  scheduleSave();
+  scheduleSaveLocal();
 }
 
 function closeEditor() {
   state.ui.activeNoteId = null;
   noteEditorEl.classList.add("hidden");
   setEditorDirty(false);
-  scheduleSave();
+  scheduleSaveLocal();
   renderNotesList();
 }
 
@@ -1310,7 +1374,7 @@ btnEditorToggleTodayTargetEl?.addEventListener("click", () => {
 btnToggleClozeHighlightEl?.addEventListener("click", () => {
   editorShowClozeHighlight = !editorShowClozeHighlight;
   state.ui.editorShowClozeHighlight = editorShowClozeHighlight;
-  scheduleSave();
+  scheduleSaveLocal();
   btnToggleClozeHighlightEl.textContent = `挖空高亮：${editorShowClozeHighlight ? "开" : "关"}`;
   const note = getNoteById(state.ui.activeNoteId);
   if (!note) return;
@@ -2333,7 +2397,7 @@ function getActivePlan() {
 function setActivePlan(id) {
   if (!id) return;
   state.ui.activePlanId = id;
-  scheduleSave();
+  scheduleSaveLocal();
   renderPlanForm();
   renderToday();
   renderStats();
@@ -3022,13 +3086,13 @@ function renderTodayTaskStatsInOverview() {
 
 btnCalendarPrevEl?.addEventListener("click", () => {
   state.ui.calendarYM = shiftYM(state.ui.calendarYM ?? todayISO().slice(0, 7), -1);
-  scheduleSave();
+  scheduleSaveLocal();
   renderCalendar();
 });
 
 btnCalendarNextEl?.addEventListener("click", () => {
   state.ui.calendarYM = shiftYM(state.ui.calendarYM ?? todayISO().slice(0, 7), 1);
-  scheduleSave();
+  scheduleSaveLocal();
   renderCalendar();
 });
 
