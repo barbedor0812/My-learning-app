@@ -45,6 +45,7 @@
               <button id="btnSignUp" class="btn btn--ghost" type="button">注册</button>
               <button id="btnSignOut" class="btn btn--danger hidden" type="button">退出登录</button>
             </div>
+            <div class="muted mt6" style="font-size:12px;">提示：邮箱或密码框按 <strong>Enter</strong> 登录；按 <strong>Shift+Enter</strong> 注册。</div>
             <div id="authMsg" class="muted mt8"></div>
             <div class="divider"></div>
             <div class="card__title mt12">数据备份（本地）</div>
@@ -73,6 +74,8 @@
                 <button id="btnStartStudyTimer" class="btn" type="button">开始计时</button>
               </div>
             </div>
+            <div id="todayLearnedHours" class="muted mt8">今日已学：0.0 小时</div>
+            <div id="todaySubjectBreakdown" class="list mt8"></div>
             <div class="divider"></div>
             <div id="todayStudyList" class="list"></div>
           </div>
@@ -157,14 +160,24 @@
               <div id="activeFolderPill" class="pill">全部</div>
             </div>
             <div id="foldersTree" class="tree mt8"></div>
-            <div class="row row--between">
-              <input id="notesSearch" class="input" placeholder="搜索标题/标签/正文…" />
-              <select id="notesFilter" class="select" aria-label="笔记筛选">
-                <option value="all">全部</option>
-                <option value="due">今日需复习</option>
-                <option value="learned">已学</option>
-                <option value="unlearned">未学</option>
-              </select>
+            <div class="notesToolbar mt8">
+              <div class="notesToolbar__search">
+                <input id="notesSearch" class="input notesToolbar__searchInput" type="search" enterkeyhint="search" placeholder="搜索标题/标签/正文…" />
+              </div>
+              <div class="notesToolbar__filters">
+                <div class="notesSortSegmented" role="group" aria-label="按标题中数字排序">
+                  <button type="button" class="notesSortSegmented__btn is-active" data-notes-sort="asc">数字升序</button>
+                  <button type="button" class="notesSortSegmented__btn" data-notes-sort="desc">数字降序</button>
+                </div>
+                <div class="notesFilterWrap">
+                  <select id="notesFilter" class="select notesFilterSelect" aria-label="笔记筛选">
+                    <option value="all">全部笔记</option>
+                    <option value="due">今日需复习</option>
+                    <option value="learned">已学</option>
+                    <option value="unlearned">未学</option>
+                  </select>
+                </div>
+              </div>
             </div>
             <div class="row row--between row--wrap gap8 mt8">
               <button id="btnToggleSelectNotes" class="btn btn--ghost" type="button">选择</button>
@@ -177,7 +190,9 @@
                 <button id="btnBulkMoveNotes" class="btn" type="button">移动</button>
               </div>
             </div>
-            <div id="notesList" class="list mt12"></div>
+            <div class="notesListScroll mt12">
+              <div id="notesList" class="list"></div>
+            </div>
           </div>
         </div>
 

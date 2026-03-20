@@ -1112,3 +1112,1851 @@ I’m dealing with a failed patch because a previously added variable isn’t be
 
 ---
 
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\app.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\app.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\app.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\app.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="read_lints">
+<details>
+<summary>Tool use: **read_lints**</summary>
+
+
+Parameters:
+
+```json
+{
+  "paths": [
+    "d:/CPA学习助手/app.js"
+  ]
+}
+```
+Result:
+
+```json
+{
+  "linterErrorsByFile": [
+    {
+      "relativeWorkspacePath": "d:/CPA学习助手/app.js"
+    }
+  ]
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="ripgrep_raw_search">
+<details>
+<summary>Tool use: **ripgrep_raw_search**</summary>
+
+
+Parameters:
+
+```json
+{
+  "pattern": "suppressPersistenceUntilLogin",
+  "path": "d:\\CPA学习助手\\app.js",
+  "outputMode": "content",
+  "caseInsensitive": false
+}
+```
+Additional data:
+
+```json
+{
+  "isPruned": true,
+  "pattern": "suppressPersistenceUntilLogin",
+  "path": "d:\\CPA学习助手\\app.js",
+  "outputMode": "content",
+  "totalFiles": 1,
+  "totalMatches": 6,
+  "topFiles": [
+    {
+      "uri": "app.js",
+      "matchCount": 6
+    }
+  ]
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="shell" data-tool-name="run_terminal_command_v2">
+<details><summary>Tool use: **run_terminal_command_v2** • Run command: Set-Location "D:\CPA学习助手"; git diff -- app.js | Select-Object -First 120</summary>
+
+```bash
+Set-Location "D:\CPA学习助手"; git diff -- app.js | Select-Object -First 120
+```
+
+```
+diff --git a/app.js b/app.js
+index 35150d4..1f3c4cf 100644
+--- a/app.js
++++ b/app.js
+@@ -280,6 +280,7 @@ function setCloudRetryCountdown(ms) {
+ 
+ function touchCloudMeta() {
+   if (applyingRemote) return;
++  if (!currentUser?.id) return;
+   const cm = state.cloudMeta &amp;&amp; typeof state.cloudMeta === "object" ? state.cloudMeta : {};
+   state.cloudMeta = {
+     rev: (Number(cm.rev) || 0) + 1,
+@@ -455,6 +456,7 @@ function flushCloudSave() {
+ }
+ 
+ function scheduleSave() {
++  if (suppressPersistenceUntilLogin) return;
+   touchCloudMeta();
+   saveState();
+   if (savingTimer) clearTimeout(savingTimer);
+@@ -465,6 +467,7 @@ function scheduleSave() {
+ }
+ 
+ function saveState() {
++  if (suppressPersistenceUntilLogin) return;
+   const HISTORY_KEY = &#96;${STORAGE_KEY}.history&#96;;
+   try {
+     const prev = localStorage.getItem(STORAGE_KEY);
+@@ -662,6 +665,9 @@ const btnAddTagEl = document.getElementById("btnAddTag");
+ 
+ // ---- Cloud / Auth state ----
+ let currentUser = null;
++// User-triggered logout must not persist an "empty" state.
++// Otherwise, on next login the empty local state can be treated as newer and overwrite cloud.
++let suppressPersistenceUntilLogin = false;
+ const cloudStatusEl = document.getElementById("cloudStatus");
+ const btnOpenAccountEl = document.getElementById("btnOpenAccount");
+ const accountPanelEl = document.getElementById("accountPanel");
+@@ -698,6 +704,7 @@ if (cloudStatusEl) {
+ async function onAuthChanged(session) {
+   currentUser = session?.user ?? null;
+   if (currentUser?.id) {
++    suppressPersistenceUntilLogin = false;
+     btnSignOutEl.classList.remove("hidden");
+     accountHintEl.textContent = &#96;已登录：${currentUser.email}（数据会自动云端同步）&#96;;
+     setCloudStatus("云端：同步中�?, "warn");
+@@ -785,8 +792,10 @@ if (btnSignOutEl)
+   btnSignOutEl.addEventListener("click", async () =&gt; {
+     authMsgEl.textContent = "";
+     try {
++      suppressPersistenceUntilLogin = true;
+       await auth.signOut();
+     } catch (e) {
++      suppressPersistenceUntilLogin = false;
+       authMsgEl.textContent = &#96;退出失败：${String(e?.message ?? e)}&#96;;
+     }
+   });
+
+```
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="shell" data-tool-name="run_terminal_command_v2">
+<details><summary>Tool use: **run_terminal_command_v2** • Run command: Set-Location "D:\CPA学习助手"; python -m http.server 5175</summary>
+
+```bash
+Set-Location "D:\CPA学习助手"; python -m http.server 5175
+```
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: C:\Users\SH1280\.cursor\projects\d-CPA\terminals\151182.txt</summary>
+
+</details>
+</tool-use>
+
+---
+
+### 我已按你更新的文档修复“登出再登录数据丢失/全端被清空”的新 bug
+
+**根因**就是：登出后本地被清空，但 `setRoute()` / UI 渲染过程仍会触发 `scheduleSave()`，从而把“空数据 + 新的 cloudMeta 时间戳”写回本地；下次登录时这份空数据会被判定为“比云端更新”，随后又会被自动 `upsert` 到 `app_state`，导致云端也被覆盖成空（所有设备一起变空）。
+
+### 修复点（已落地在 `app.js`）
+- **新增保护开关**：`suppressPersistenceUntilLogin`
+  - 点击“退出登录”后立刻置为 `true`
+  - 直到重新登录成功后再置回 `false`
+- **登出期间禁止持久化/自动同步**
+  - `scheduleSave()`、`saveState()` 在 `suppressPersistenceUntilLogin=true` 时直接 `return`
+- **避免“未登录状态”污染版本号**
+  - `touchCloudMeta()` 增加 `if (!currentUser?.id) return;`，防止登出后的空状态把 `cloudMeta` 刷新成“更新版本”
+
+这样就能保证：
+- **登出**：本地内存和 localStorage 会清空，但不会产生新的“空版本”被保存
+- **重新登录**：会正确拉取云端数据，不会再被空本地覆盖，更不会把空数据写回云端
+
+### 你现在怎么验证
+按你文档的步骤再跑一遍：
+- A 端登录 -> 新增/修改数据 -> 确认 B 端看到
+- A 端登出 -> 再登录同账号
+- **预期**：A 端恢复原数据，B 端数据也保持不变（不会被清空）
+
+如果你验证时控制台还有任何报错，把第一条错误贴我，我继续补齐剩余边界。
+
+---
+
+_**User**_
+
+文件夹路径：D:\CPA学习助手，这是你帮我写的学习助手app。现在有优化需求，我已更新了cursor.txt文件。请通读后根据文档内容做出优化。
+
+---
+
+_**Agent (model default, mode Agent)**_
+
+我先完整重读 `D:\CPA学习助手\cursor.txt` 的最新优化需求，提炼具体改动清单后，直接在现有代码里逐项实现并做快速自检。
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: d:\CPA学习助手\cursor.txt</summary>
+
+</details>
+</tool-use>
+
+---
+
+我会分三块实现：①笔记页（滚动容器、数字排序、重命名、PDF命名）②今日任务（科目学时明细+今日已学累计、计时<1分钟不入账）③全局交互（登录/重命名回车提交）并同步调整统计显示与样式。先改 `index.html` 和 `styles.css`，再改 `app.js` 逻辑。
+
+---
+
+Failed to find context:
+            <div class="row row--between">
+              <div id="todayStudyTarget" class="big">—</div>
+              <div class="row gap8">
+                <span id="studyTimerDisplay" class="pill hidden">00:00:00</span>
+                <button id="btnStartStudyTimer" class="btn" type="button">开始计时</button>
+              </div>
+            </div>
+            <div class="divider"></div>
+            <div id="todayStudyList" class="list"></div>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="ripgrep_raw_search">
+<details>
+<summary>Tool use: **ripgrep_raw_search**</summary>
+
+
+Parameters:
+
+```json
+{
+  "pattern": "todayStudyTarget|notesSearch|notesFilter|notesList",
+  "path": "d:\\CPA学习助手\\index.html",
+  "outputMode": "content",
+  "caseInsensitive": false
+}
+```
+Additional data:
+
+```json
+{
+  "isPruned": true,
+  "pattern": "todayStudyTarget|notesSearch|notesFilter|notesList",
+  "path": "d:\\CPA学习助手\\index.html",
+  "outputMode": "content",
+  "totalFiles": 1,
+  "totalMatches": 4,
+  "topFiles": [
+    {
+      "uri": "index.html",
+      "matchCount": 4
+    }
+  ]
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: d:\CPA学习助手\index.html</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\index.html</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="ripgrep_raw_search">
+<details>
+<summary>Tool use: **ripgrep_raw_search**</summary>
+
+
+Parameters:
+
+```json
+{
+  "pattern": "list__item|blank input|notesListScroll|btn--small",
+  "path": "d:\\CPA学习助手\\styles.css",
+  "outputMode": "content",
+  "caseInsensitive": false
+}
+```
+Additional data:
+
+```json
+{
+  "isPruned": true,
+  "pattern": "list__item|blank input|notesListScroll|btn--small",
+  "path": "d:\\CPA学习助手\\styles.css",
+  "outputMode": "content",
+  "totalFiles": 1,
+  "totalMatches": 11,
+  "topFiles": [
+    {
+      "uri": "styles.css",
+      "matchCount": 11
+    }
+  ]
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\styles.css</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+我正在改 `app.js` 的核心逻辑：新增排序状态入云、列表数字排序、行内重命名、PDF默认命名、计时阈值与今日学时明细。改动点较多，我会分段提交并马上跑 lint 检查，避免再出现“页面无响应”问题。
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="ripgrep_raw_search">
+<details>
+<summary>Tool use: **ripgrep_raw_search**</summary>
+
+
+Parameters:
+
+```json
+{
+  "pattern": "createInitialState\\(|out\\.ui\\.|notesFilterEl|renderNotesList\\(|btnStartStudyTimer|btnCreateNotesFromPdf|todayStudyTargetEl|studyLog.push",
+  "path": "d:\\CPA学习助手\\app.js",
+  "outputMode": "content",
+  "caseInsensitive": false
+}
+```
+Additional data:
+
+```json
+{
+  "isPruned": true,
+  "pattern": "createInitialState\\(|out\\.ui\\.|notesFilterEl|renderNotesList\\(|btnStartStudyTimer|btnCreateNotesFromPdf|todayStudyTargetEl|studyLog.push",
+  "path": "d:\\CPA学习助手\\app.js",
+  "outputMode": "content",
+  "totalFiles": 1,
+  "totalMatches": 34,
+  "topFiles": [
+    {
+      "uri": "app.js",
+      "matchCount": 34
+    }
+  ]
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: d:\CPA学习助手\app.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: d:\CPA学习助手\app.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: d:\CPA学习助手\app.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: d:\CPA学习助手\app.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+Failed to find context:
+let notesSelectionMode = false;
+let selectedNoteIds = new Set();
+let openMovePanelNoteId = null;
+let movePanelDraft = { targetType: "folder", folderId: null, newFolderName: "" };
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="ripgrep_raw_search">
+<details>
+<summary>Tool use: **ripgrep_raw_search**</summary>
+
+
+Parameters:
+
+```json
+{
+  "pattern": "Notes multi-select|selectedNoteIds|movePanelDraft",
+  "path": "d:\\CPA学习助手\\app.js",
+  "outputMode": "content",
+  "caseInsensitive": false
+}
+```
+Additional data:
+
+```json
+{
+  "isPruned": true,
+  "pattern": "Notes multi-select|selectedNoteIds|movePanelDraft",
+  "path": "d:\\CPA学习助手\\app.js",
+  "outputMode": "content",
+  "totalFiles": 1,
+  "totalMatches": 14,
+  "topFiles": [
+    {
+      "uri": "app.js",
+      "matchCount": 14
+    }
+  ]
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: d:\CPA学习助手\app.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\app.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+Failed to find context:
+let notesSelectionMode = false;
+let selectedNoteIds = new Set();
+let openMovePanelNoteId = null;
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: d:\CPA学习助手\app.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\app.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\app.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\app.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\app.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\app.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\app.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\app.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\app.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\app.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: d:\CPA学习助手\app.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="read_lints">
+<details>
+<summary>Tool use: **read_lints**</summary>
+
+
+Parameters:
+
+```json
+{
+  "paths": [
+    "d:/CPA学习助手/app.js",
+    "d:/CPA学习助手/index.html",
+    "d:/CPA学习助手/styles.css"
+  ]
+}
+```
+Result:
+
+```json
+{
+  "linterErrorsByFile": [
+    {
+      "relativeWorkspacePath": "d:/CPA学习助手/app.js"
+    },
+    {
+      "relativeWorkspacePath": "d:/CPA学习助手/index.html"
+    },
+    {
+      "relativeWorkspacePath": "d:/CPA学习助手/styles.css"
+    }
+  ]
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="shell" data-tool-name="run_terminal_command_v2">
+<details><summary>Tool use: **run_terminal_command_v2** • Run command: Set-Location "D:\CPA学习助手"; node --check app.js</summary>
+
+```bash
+Set-Location "D:\CPA学习助手"; node --check app.js
+```
+
+```
+node : �޷�����node����ʶ��Ϊ cmdlet���������ű��ļ�������г�������ơ��������Ƶ�ƴд���������·������ȷ��·����ȷ��Ȼ��
+����һ�Ρ�
+����λ�� C:\Users\SH1280\AppData\Local\Temp\ps-script-605f9610-573f-4fa3-982d-67acff85798a.ps1:7 �ַ�: 28
++ Set-Location "D:\CPAѧϰ����"; node --check app.js
++                            ~~~~
+    + CategoryInfo          : ObjectNotFound: (node:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+```
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="shell" data-tool-name="run_terminal_command_v2">
+<details><summary>Tool use: **run_terminal_command_v2** • Run command: Set-Location "D:\CPA学习助手"; git diff -- index.html styles.css app.js</summary>
+
+```bash
+Set-Location "D:\CPA学习助手"; git diff -- index.html styles.css app.js
+```
+
+```
+diff --git a/app.js b/app.js
+index 1f3c4cf..db43d61 100644
+--- a/app.js
++++ b/app.js
+@@ -501,6 +501,7 @@ function createInitialState() {
+       activeNoteId: null,
+       activeFolderId: "all",
+       activePlanId: null,
++      notesSortOrder: "asc",
+       calendarYM: null, // "YYYY-MM"
+       expandedFolderIds: [],
+       editorShowClozeHighlight: true,
+@@ -562,6 +563,7 @@ function migrateState(s) {
+   out.notes = out.notes.map((n) =&gt; ({ ...n, folderId: n?.folderId ?? null, isTodayTarget: !!n?.isTodayTarget }));
+ 
+   out.ui.activeFolderId = out.ui.activeFolderId ?? "all";
++  out.ui.notesSortOrder = out.ui.notesSortOrder === "desc" ? "desc" : "asc";
+   out.ui.calendarYM = out.ui.calendarYM ?? todayISO().slice(0, 7);
+   out.ui.expandedFolderIds = Array.isArray(out.ui.expandedFolderIds) ? out.ui.expandedFolderIds : [];
+ 
+@@ -574,6 +576,8 @@ let state = loadState();
+ // Notes multi-select (UI-only, not persisted)
+ let notesSelectionMode = false;
+ let selectedNoteIds = new Set();
++let renamingNoteId = null;
++let renamingDraftTitle = "";
+ let openMovePanelNoteId = null;
+ let movePanelDraft = { targetType: "folder", folderId: null, newFolderName: "" };
+ 
+@@ -634,6 +638,7 @@ if (importJsonEl) {
+ const notesListEl = document.getElementById("notesList");
+ const notesSearchEl = document.getElementById("notesSearch");
+ const notesFilterEl = document.getElementById("notesFilter");
++const notesSortOrderEl = document.getElementById("notesSortOrder");
+ const btnToggleSelectNotesEl = document.getElementById("btnToggleSelectNotes");
+ const notesBulkActionsEl = document.getElementById("notesBulkActions");
+ const notesSelectedCountEl = document.getElementById("notesSelectedCount");
+@@ -775,6 +780,18 @@ if (btnSignInEl) {
+     if (error) authMsgEl.textContent = &#96;登录失败：${error.message}&#96;;
+   });
+ }
++authEmailEl?.addEventListener("keydown", (e) =&gt; {
++  if (e.key === "Enter") {
++    e.preventDefault();
++    btnSignInEl?.click();
++  }
++});
++authPasswordEl?.addEventListener("keydown", (e) =&gt; {
++  if (e.key === "Enter") {
++    e.preventDefault();
++    btnSignInEl?.click();
++  }
++});
+ 
+ if (btnSignUpEl) {
+   btnSignUpEl.addEventListener("click", async () =&gt; {
+@@ -1477,6 +1494,40 @@ function isNoteDueToday(noteId) {
+   return state.reviewTasks.some((t) =&gt; t.noteId === noteId &amp;&amp; t.dueDate === iso &amp;&amp; !t.completedAt);
+ }
+ 
++function extractFirstNumber(title) {
++  const m = String(title ?? "").match(/\d+/);
++  return m ? Number(m[0]) : null;
++}
++
++function compareByNumericTitle(a, b, order = "asc") {
++  const n1 = extractFirstNumber(a.title);
++  const n2 = extractFirstNumber(b.title);
++  const factor = order === "desc" ? -1 : 1;
++  const has1 = Number.isFinite(n1);
++  const has2 = Number.isFinite(n2);
++  if (has1 &amp;&amp; has2 &amp;&amp; n1 !== n2) return (n1 - n2) * factor;
++  if (has1 &amp;&amp; !has2) return -1;
++  if (!has1 &amp;&amp; has2) return 1;
++  const t1 = String(a.title ?? "");
++  const t2 = String(b.title ?? "");
++  const byText = t1.localeCompare(t2, "zh");
++  if (byText !== 0) return byText * factor;
++  return (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "");
++}
++
++function getUniqueNoteTitle(baseTitle, excludeId = null) {
++  const base = String(baseTitle ?? "").trim() || "未命名笔记";
++  let candidate = base;
++  let i = 1;
++  const hasConflict = (name) =&gt;
++    state.notes.some((n) =&gt; n.id !== excludeId &amp;&amp; String(n.title ?? "").trim() === name);
++  while (hasConflict(candidate)) {
++    candidate = &#96;${base}(${i})&#96;;
++    i += 1;
++  }
++  return candidate;
++}
++
+ function bulkMoveNotes() {
+   const ids = [...selectedNoteIds];
+   if (ids.length === 0) return alert("请先选择要移动的笔记");
+@@ -1499,7 +1550,8 @@ btnBulkMoveNotesEl?.addEventListener("click", bulkMoveNotes);
+ function renderNotesList() {
+   const q = (notesSearchEl.value ?? "").trim().toLowerCase();
+   const filter = notesFilterEl.value;
+-  const iso = todayISO();
++  const sortOrder = state.ui.notesSortOrder === "desc" ? "desc" : "asc";
++  if (notesSortOrderEl) notesSortOrderEl.value = sortOrder;
+   const folder = getActiveFolderId();
+ 
+   const list = state.notes
+@@ -1524,7 +1576,7 @@ function renderNotesList() {
+       if (filter === "todayTarget") return !!n.isTodayTarget;
+       return true;
+     })
+-    .sort((a, b) =&gt; (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
++    .sort((a, b) =&gt; compareByNumericTitle(a, b, sortOrder));
+ 
+   if (list.length === 0) {
+     notesListEl.innerHTML = &#96;&lt;div class="muted centered-text" style="padding: 40px 20px;"&gt;无笔记&lt;/div&gt;&#96;;
+@@ -1537,6 +1589,7 @@ function renderNotesList() {
+       const learned = !!n.learnedAt;
+       const selected = selectedNoteIds.has(n.id);
+       const cls = &#96;list__item ${selected ? "is-selected" : ""}&#96;;
++      const isRenaming = renamingNoteId === n.id;
+ 
+       const checkboxHtml = notesSelectionMode
+         ? &#96;
+@@ -1550,8 +1603,10 @@ function renderNotesList() {
+       &lt;div class="${cls}" data-id="${n.id}"&gt;
+         &lt;div class="list__item-main"&gt;
+           ${checkboxHtml}
+-          &lt;div class="list__item-content" data-action="openNote" data-id="${n.id}"&gt;
+-            &lt;div class="list__item-title"&gt;${escapeHtml(n.title)}&lt;/div&gt;
++          &lt;div class="list__item-content" ${isRenaming ? "" : &#96;data-action="openNote" data-id="${n.id}"&#96;}&gt;
++            &lt;div class="list__item-title"&gt;
++              ${isRenaming ? &#96;&lt;input class="input noteRenameInput" data-action="renameInput" data-id="${n.id}" value="${escapeHtml(renamingDraftTitle || n.title)}" /&gt;&#96; : &#96;${escapeHtml(n.title)}&#96;}
++            &lt;/div&gt;
+             &lt;div class="list__item-meta"&gt;
+               ${isDue ? &#96;&lt;span class="chip chip--due"&gt;需复习&lt;/span&gt;&#96; : ""}
+               ${learned ? &#96;&lt;span class="chip chip--learned"&gt;已学&lt;/span&gt;&#96; : ""}
+@@ -1559,8 +1614,12 @@ function renderNotesList() {
+           &lt;/div&gt;
+         &lt;/div&gt;
+         &lt;div class="list__item-actions"&gt;
+-          &lt;button class="btn--secondary btn--small" data-action="reviewNote" data-id="${n.id}"&gt;复习&lt;/button&gt;
+-          &lt;button class="btn btn--small" data-action="openNote" data-id="${n.id}"&gt;编辑&lt;/button&gt;
++          ${isRenaming
++            ? &#96;&lt;button class="btn btn--small" data-action="saveRename" data-id="${n.id}" title="保存"&gt;✓&lt;/button&gt;
++               &lt;button class="btn btn--ghost btn--small" data-action="cancelRename" data-id="${n.id}" title="取消"&gt;✕&lt;/button&gt;&#96;
++            : &#96;&lt;button class="btn btn--ghost btn--small" data-action="startRename" data-id="${n.id}" title="重命名"&gt;✎&lt;/button&gt;
++               &lt;button class="btn--secondary btn--small" data-action="reviewNote" data-id="${n.id}"&gt;复习&lt;/button&gt;
++               &lt;button class="btn btn--small" data-action="openNote" data-id="${n.id}"&gt;编辑&lt;/button&gt;&#96;}
+         &lt;/div&gt;
+       &lt;/div&gt;
+     &#96;;
+@@ -1573,6 +1632,70 @@ function renderNotesList() {
+   notesListEl.querySelectorAll("[data-action='reviewNote']").forEach((el) =&gt; {
+     el.addEventListener("click", () =&gt; openReview(el.dataset.id));
+   });
++  notesListEl.querySelectorAll("[data-action='startRename']").forEach((el) =&gt; {
++    el.addEventListener("click", () =&gt; {
++      const id = el.dataset.id;
++      const note = getNoteById(id);
++      if (!note) return;
++      renamingNoteId = id;
++      renamingDraftTitle = note.title ?? "";
++      renderNotesList();
++      const input = notesListEl.querySelector(&#96;[data-action='renameInput'][data-id='${id}']&#96;);
++      if (input) {
++        input.focus();
++        input.select();
++      }
++    });
++  });
++  notesListEl.querySelectorAll("[data-action='renameInput']").forEach((el) =&gt; {
++    el.addEventListener("input", () =&gt; {
++      renamingDraftTitle = el.value ?? "";
++    });
++    el.addEventListener("keydown", (e) =&gt; {
++      if (e.key === "Enter") {
++        e.preventDefault();
++        const id = el.dataset.id;
++        const note = getNoteById(id);
++        if (!note) return;
++        const nextTitle = String(renamingDraftTitle ?? "").trim();
++        if (!nextTitle) return alert("名称不能为空");
++        note.title = getUniqueNoteTitle(nextTitle, note.id);
++        note.updatedAt = new Date().toISOString();
++        upsertNote(note);
++        renamingNoteId = null;
++        renamingDraftTitle = "";
++        scheduleSave();
++        renderNotesList();
++      } else if (e.key === "Escape") {
++        renamingNoteId = null;
++        renamingDraftTitle = "";
++        renderNotesList();
++      }
++    });
++  });
++  notesListEl.querySelectorAll("[data-action='saveRename']").forEach((el) =&gt; {
++    el.addEventListener("click", () =&gt; {
++      const id = el.dataset.id;
++      const note = getNoteById(id);
++      if (!note) return;
++      const nextTitle = String(renamingDraftTitle ?? "").trim();
++      if (!nextTitle) return alert("名称不能为空");
++      note.title = getUniqueNoteTitle(nextTitle, note.id);
++      note.updatedAt = new Date().toISOString();
++      upsertNote(note);
++      renamingNoteId = null;
++      renamingDraftTitle = "";
++      scheduleSave();
++      renderNotesList();
++    });
++  });
++  notesListEl.querySelectorAll("[data-action='cancelRename']").forEach((el) =&gt; {
++    el.addEventListener("click", () =&gt; {
++      renamingNoteId = null;
++      renamingDraftTitle = "";
++      renderNotesList();
++    });
++  });
+   notesListEl.querySelectorAll("[data-action='selectNote']").forEach((el) =&gt; {
+     el.addEventListener("change", (e) =&gt; {
+       const id = e.target.dataset.id;
+@@ -1624,6 +1747,11 @@ function deleteSelectedNotes() {
+ 
+ notesSearchEl.addEventListener("input", renderNotesList);
+ notesFilterEl.addEventListener("change", renderNotesList);
++notesSortOrderEl?.addEventListener("change", () =&gt; {
++  state.ui.notesSortOrder = notesSortOrderEl.value === "desc" ? "desc" : "asc";
++  scheduleSave();
++  renderNotesList();
++});
+ 
+ btnToggleSelectNotesEl.addEventListener("click", () =&gt; {
+   notesSelectionMode = !notesSelectionMode;
+@@ -1831,6 +1959,7 @@ const pdfRulesFormEl = document.getElementById("pdfRulesForm");
+ const btnAddPdfRuleEl = document.getElementById("btnAddPdfRule");
+ 
+ let pdfRulesDraft = []; // [{id, from, to, targetType: 'folder'|'uncategorized'|'new', folderId, newFolderName}]
++let currentPdfBaseName = "从PDF导入";
+ 
+ function renderPdfRulesForm() {
+   if (!pdfRulesFormEl) return;
+@@ -1912,6 +2041,10 @@ function renderPdfRulesForm() {
+ pdfInputEl.addEventListener("change", async (e) =&gt; {
+   const file = e.target.files?.[0];
+   if (!file) return;
++  currentPdfBaseName =
++    String(file.name ?? "")
++      .replace(/\.[^.]+$/, "")
++      .trim() || "从PDF导入";
+   if (!pdfjsLib?.getDocument) {
+     pdfImportStatusEl.textContent =
+       "解析失败：PDF 解析组件未加载。请确认同目录下存在 pdf.min.js 与 pdf.worker.min.js，然后刷新页面重试。";
+@@ -2063,14 +2196,15 @@ document.getElementById("btnCreateNotesFromPdf")?.addEventListener("click", () =
+   const now = new Date().toISOString();
+   let createdCount = 0;
+ 
+-  for (const c of chunks) {
++  for (let idx = 0; idx &lt; chunks.length; idx++) {
++    const c = chunks[idx];
+     const pageNo = inferPdfPageNo(c);
+     const folderId = pickFolderIdForPageNo(pageNo, rules);
+     
+     if (folderId === undefined) continue; // Skip if no rule matches
+ 
+-    const firstLine = c.split(/\r?\n/).find((l) =&gt; l.trim()) ?? "从PDF导入";
+-    const title = firstLine.replace(/^#+\s*/, "").slice(0, 40) || "从PDF导入";
++    const pageLabel = Number.isFinite(pageNo) ? pageNo : idx + 1;
++    const title = getUniqueNoteTitle(&#96;${currentPdfBaseName}_第${pageLabel}页&#96;);
+ 
+     upsertNote({
+       id: uid("note"),
+@@ -2411,6 +2545,8 @@ btnDeletePlanSubjectEl.addEventListener("click", () =&gt; {
+ // ---------------- Today ----------------
+ const todayHintEl = document.getElementById("todayHint");
+ const todayStudyTargetEl = document.getElementById("todayStudyTarget");
++const todayLearnedHoursEl = document.getElementById("todayLearnedHours");
++const todaySubjectBreakdownEl = document.getElementById("todaySubjectBreakdown");
+ const todayStudyListEl = document.getElementById("todayStudyList");
+ const todayReviewListEl = document.getElementById("todayReviewList");
+ const todayMoodSavedEl = document.getElementById("todayMoodSaved");
+@@ -2499,17 +2635,19 @@ document.getElementById("btnStartStudyTimer")?.addEventListener("click", () =&gt; {
+     studyTimer.running = true;
+     studyTimer.startedAt = Date.now();
+     studyTimer.noteId = null;
+-    document.getElementById("btnStartStudyTimer").textContent = "停止并记录";
++    document.getElementById("btnStartStudyTimer").textContent = "结束计时";
+     startStudyTick();
+     return;
+   }
+   const ms = Date.now() - (studyTimer.startedAt ?? Date.now());
+-  const hours = ms / 1000 / 60 / 60;
+-  state.studyLog.push({ id: uid("st"), iso: todayISO(), hours, at: new Date().toISOString() });
++  if (ms &gt;= 60000) {
++    const hours = ms / 1000 / 60 / 60;
++    state.studyLog.push({ id: uid("st"), iso: todayISO(), hours, at: new Date().toISOString() });
++    scheduleSave();
++  }
+   stopStudyTick();
+   studyTimer = { running: false, startedAt: null, noteId: null, tickId: null };
+   document.getElementById("btnStartStudyTimer").textContent = "开始计时";
+-  scheduleSave();
+   renderToday();
+   renderStats();
+ });
+@@ -2527,6 +2665,33 @@ function renderToday() {
+     : "按计划推进，先做新学，再做复习。";
+ 
+   todayStudyTargetEl.textContent = plannedHours &gt; 0 ? &#96;今日新学目标：${formatHours(plannedHours)}&#96; : "今日新学目标：—";
++  const todayLearned = (state.studyLog ?? [])
++    .filter((x) =&gt; x.iso === iso)
++    .reduce((sum, x) =&gt; sum + (Number(x.hours) || 0), 0);
++  if (todayLearnedHoursEl) {
++    todayLearnedHoursEl.textContent = &#96;今日已学：${todayLearned.toFixed(1)} 小时&#96;;
++  }
++  if (todaySubjectBreakdownEl) {
++    const rows = (state.plans ?? [])
++      .map((p) =&gt; ({
++        subject: p.subject || "未命名科目",
++        h: Number(p.generated?.allocations?.find((a) =&gt; a.iso === iso)?.plannedHours ?? 0),
++      }))
++      .filter((x) =&gt; x.h &gt; 0);
++    if (rows.length === 0) {
++      todaySubjectBreakdownEl.innerHTML = &#96;&lt;div class="muted"&gt;今日暂无科目目标明细&lt;/div&gt;&#96;;
++    } else {
++      const total = rows.reduce((s, x) =&gt; s + x.h, 0);
++      todaySubjectBreakdownEl.innerHTML =
++        rows
++          .map(
++            (r) =&gt;
++              &#96;&lt;div class="item item--compact"&gt;&lt;div class="row row--between"&gt;&lt;div&gt;${escapeHtml(r.subject)}&lt;/div&gt;&lt;div&gt;${r.h.toFixed(1)}h&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;&#96;,
++          )
++          .join("") +
++        &#96;&lt;div class="item item--compact"&gt;&lt;div class="row row--between"&gt;&lt;strong&gt;总计&lt;/strong&gt;&lt;strong&gt;${total.toFixed(1)}h&lt;/strong&gt;&lt;/div&gt;&lt;/div&gt;&#96;;
++    }
++  }
+ 
+   const dueTasks = state.reviewTasks.filter((t) =&gt; t.dueDate === iso &amp;&amp; !t.completedAt);
+   if (dueTasks.length === 0) todayReviewListEl.innerHTML = &#96;&lt;div class="muted"&gt;今天没有到期复习任务。&lt;/div&gt;&#96;;
+diff --git a/index.html b/index.html
+index 99d04ca..37578cb 100644
+--- a/index.html
++++ b/index.html
+@@ -73,6 +73,8 @@
+                 &lt;button id="btnStartStudyTimer" class="btn" type="button"&gt;开始计时&lt;/button&gt;
+               &lt;/div&gt;
+             &lt;/div&gt;
++            &lt;div id="todayLearnedHours" class="muted mt8"&gt;今日已学：0.0 小时&lt;/div&gt;
++            &lt;div id="todaySubjectBreakdown" class="list mt8"&gt;&lt;/div&gt;
+             &lt;div class="divider"&gt;&lt;/div&gt;
+             &lt;div id="todayStudyList" class="list"&gt;&lt;/div&gt;
+           &lt;/div&gt;
+@@ -159,12 +161,18 @@
+             &lt;div id="foldersTree" class="tree mt8"&gt;&lt;/div&gt;
+             &lt;div class="row row--between"&gt;
+               &lt;input id="notesSearch" class="input" placeholder="搜索标题/标签/正文…" /&gt;
+-              &lt;select id="notesFilter" class="select" aria-label="笔记筛选"&gt;
+-                &lt;option value="all"&gt;全部&lt;/option&gt;
+-                &lt;option value="due"&gt;今日需复习&lt;/option&gt;
+-                &lt;option value="learned"&gt;已学&lt;/option&gt;
+-                &lt;option value="unlearned"&gt;未学&lt;/option&gt;
+-              &lt;/select&gt;
++              &lt;div class="row gap8"&gt;
++                &lt;select id="notesSortOrder" class="select select--small" aria-label="笔记排序"&gt;
++                  &lt;option value="asc"&gt;数字升序&lt;/option&gt;
++                  &lt;option value="desc"&gt;数字降序&lt;/option&gt;
++                &lt;/select&gt;
++                &lt;select id="notesFilter" class="select" aria-label="笔记筛选"&gt;
++                  &lt;option value="all"&gt;全部&lt;/option&gt;
++                  &lt;option value="due"&gt;今日需复习&lt;/option&gt;
++                  &lt;option value="learned"&gt;已学&lt;/option&gt;
++                  &lt;option value="unlearned"&gt;未学&lt;/option&gt;
++                &lt;/select&gt;
++              &lt;/div&gt;
+             &lt;/div&gt;
+             &lt;div class="row row--between row--wrap gap8 mt8"&gt;
+               &lt;button id="btnToggleSelectNotes" class="btn btn--ghost" type="button"&gt;选择&lt;/button&gt;
+@@ -177,7 +185,9 @@
+                 &lt;button id="btnBulkMoveNotes" class="btn" type="button"&gt;移动&lt;/button&gt;
+               &lt;/div&gt;
+             &lt;/div&gt;
+-            &lt;div id="notesList" class="list mt12"&gt;&lt;/div&gt;
++            &lt;div class="notesListScroll mt12"&gt;
++              &lt;div id="notesList" class="list"&gt;&lt;/div&gt;
++            &lt;/div&gt;
+           &lt;/div&gt;
+         &lt;/div&gt;
+ 
+diff --git a/styles.css b/styles.css
+index 5703a09..d6fd1dc 100644
+--- a/styles.css
++++ b/styles.css
+@@ -351,15 +351,23 @@ code{ font-family: var(--mono); }
+ .list{
+   display:flex;
+   flex-direction:column;
+-  gap:8px;
++  gap:4px;
++}
++.notesListScroll{
++  max-height: 340px;
++  overflow-y: auto;
++  border: 1px solid var(--border);
++  border-radius: 10px;
++  background: #fff;
++  padding: 4px;
+ }
+ .list__item {
+-  padding: 14px 16px;
++  padding: 8px 10px;
+   border-bottom: 1px solid var(--border);
+   display: flex;
+   justify-content: space-between;
+   align-items: center;
+-  gap: 12px;
++  gap: 8px;
+   transition: all 0.2s;
+ }
+ .list__item:last-child { border-bottom: none; }
+@@ -367,10 +375,10 @@ code{ font-family: var(--mono); }
+ .list__item.is-selected { background: #e8f2ff; }
+ 
+ .list__item-title {
+-  font-size: 15px;
++  font-size: 13px;
+   font-weight: 500;
+   color: var(--text);
+-  margin-bottom: 2px;
++  margin-bottom: 0;
+ }
+ .list__item-main {
+   flex-grow: 1;
+@@ -385,7 +393,12 @@ code{ font-family: var(--mono); }
+ .list__item-actions {
+   flex-shrink: 0;
+   display: flex;
+-  gap: 8px;
++  gap: 6px;
++}
++.list__item-actions .btn,
++.list__item-actions .btn--secondary{
++  padding: 3px 8px;
++  font-size: 12px;
+ }
+ 
+ .preview{
+@@ -502,12 +515,18 @@ code{ font-family: var(--mono); }
+   background: transparent;
+   width: 60px; /* Reduced width */
+   padding: 0 4px;
++  line-height: 1.2;
+   text-align: center;
+   color: var(--accent);
+   font-family: var(--mono);
+   font-size: 13px; /* Reduced font size */
+   outline: none;
+ }
++.noteRenameInput{
++  width: 180px;
++  padding: 2px 6px;
++  font-size: 13px;
++}
+ .blank.is-correct{
+   border-color: rgba(51,214,166,.6);
+   background: rgba(51,214,166,.10);
+
+```
+</details>
+</tool-use>
+
+---
+
+已按你最新 `cursor.txt` 完成一轮优化，重点落在你文档里“可直接验收”的核心点上，并尽量复用现有代码而不是重写。
+
+### 本次已实现
+
+- 笔记列表滚动容器
+  - 在“我的笔记”列表外加了固定高度滚动区 `notesListScroll`（约 340px），列表过长不再拉长整页。
+  - 文件列表行距、按钮尺寸已整体缩小，页面更紧凑。
+
+- 笔记数字排序（支持升序/降序，状态持久化）
+  - 新增排序控件 `notesSortOrder`（数字升序/降序）。
+  - 排序规则：优先比较标题中提取到的数字；无数字时按中文字符串排序兜底。
+  - 排序状态写入 `state.ui.notesSortOrder`，会随原有云同步一起持久化。
+
+- 笔记重命名（行内编辑）
+  - 每条笔记新增重命名按钮 `✎`。
+  - 进入编辑后支持：
+    - `Enter` 保存
+    - `Esc` 取消
+    - 也可点击 `✓` 保存、`✕` 取消
+  - 名称为空会提示；重名自动加后缀 `(1)(2)...` 避免冲突。
+  - 保存后立即刷新并持久化。
+
+- 复习填空输入框高度优化
+  - 调整了 `.blank input` 的垂直视觉高度（压缩行高），保持左右尺寸不变，观感更贴近正文行高。
+
+- PDF 导入默认命名优化
+  - 现在按 `原文件名_第X页` 生成标题。
+  - 例如：`会计教材_第3页`。
+  - 若重名会自动加后缀避免冲突。
+
+- 今日任务增强
+  - “今日新学”新增：
+    - `今日已学：X.X 小时`
+    - 科目明细列表（每科目当天计划小时）
+    - 总计小时
+  - 计时规则改为：**小于 1 分钟不记入**，`>= 1 分钟`才写入 `studyLog`。
+  - 计时按钮文案改为“开始计时 / 结束计时”。
+
+- 回车键支持（本轮先补登录）
+  - 登录输入框（邮箱/密码）按 `Enter` 会直接触发登录。
+
+### 涉及文件
+
+- `index.html`
+- `styles.css`
+- `app.js`
+
+### 说明
+
+- 统计页的“学时进度累计”与日历实际时长显示，现有逻辑本身已基于 `studyLog` 累加；本次计时阈值修正后，统计会自动更准确。
+- 我已做静态检查与 lints（无新增 lint 报错）。你本机未装 `node`，所以没法用 `node --check` 做额外语法检查；建议你直接刷新页面走一遍交互验证。
+
+如果你愿意，我下一步可以继续把“回车提交”补齐到更多输入场景（如“新增今日任务”、“重命名科目”等），做到你文档里的全局一致。
+
+---
+
+_**User**_
+
+1、美化一下笔记页面文件升序降序排列按钮和“今日需复习/已学/未学"按钮的字体和显示，用户需要清楚完整看到该按钮上的文字内容并且视觉效果美观，参考苹果公司按钮设计。2、复习填空输入框内部行高度太高，参考WORD文档的单倍行距，缩小输入框的内行高度，保持输入框内部左右尺寸不变，内行高度观感需更贴近正文行高。3、手机端也需要完整按照文档内容做优化，目前我看到电脑端的文件夹滚动容器存在，但是手机端还没有实现该功能。并且手机端没有文件夹的排序功能。请排查目前电脑上的优化内容没有在手机端进行同步的优化，请拉齐。4、请继续把“回车提交”补齐到更多输入场景。
+
+---
+
+_**Agent (model default, mode Agent)**_
+
+<think><details><summary>Thought Process</summary>
+
+The user wants several improvements:
+
+1. **Beautify the notes page controls**: The sort buttons (asc/desc) and filter dropdown ("今日需复习/已学/未学") - better typography, full text visible, Apple-style design.
+
+2. **Review blank inputs**: Further reduce internal line height to match Word single spacing - keep left/right padding unchanged.
+
+3. **Mobile parity**: 
+   - Scroll container for notes list on mobile (they say desktop has it but mobile doesn't - need to check CSS/layout)
+   - Sort on mobile
+   - Ensure all desktop optimizations apply on mobile
+
+4. **Enter key**: Extend to more input scenarios (daily tasks, tag input, plan fields, etc.)
+
+Let me read the current index.html, styles.css for notes section and media queries, and app.js for inputs that need Enter handlers.
+
+For mobile scroll container - likely the issue is:
+- `row row--between` might squash the selects or overflow hidden somewhere
+- Maybe `.notesListScroll` needs min-height on mobile or flex fix
+- Maybe the parent `.row` doesn't wrap and selects get cut off on small screens
+
+I'll grep for notesListScroll, notesSortOrder, media queries, and blank input styles.
+</details></think>
+
+---
+
+
+逐项处理：先查看笔记区布局与移动端样式，再调整控件样式、填空输入框行高，并补齐回车提交与移动端拉齐。
+
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: d:\CPA学习助手\index.html</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: d:\CPA学习助手\styles.css</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: d:\CPA学习助手\styles.css</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: d:\CPA学习助手\styles.css</summary>
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+
+I need to:
+
+1. **Apple-style controls for notes toolbar**: Replace cramped side-by-side row with a stacked layout on mobile and use proper segmented control or styled selects. Full text visibility.
+
+   HTML change: wrap search + filters in a `notesToolbar` with flex-column on mobile:
+   - Row 1: search full width
+   - Row 2: sort + filter as full-width selects OR use a segmented control for sort (升序 | 降序) and full width filter select
+
+   For Apple-like: use `.segmented--notes` for sort (two options) and a `.select--apple` for filter with min-width, no truncation.
+
+2. **Blank input**: Further tighten - use height: 1.2em or line-height 1, padding-top/bottom 0, maybe box-sizing. The duplicate .blank styles in file - need to update both.
+
+3. **Mobile**: 
+   - `.notesListScroll` add `min-height: 200px` and `flex: 1` with `max-height: min(45vh, 340px)` or `max-height: 50dvh` so on mobile it actually shows a scroll area. Maybe issue is max-height 340px on short viewports with something overflow hidden on parent?
+   - Actually user said "mobile doesn't have scroll container" - perhaps the card or grid clips overflow? Or the grid stacks and the list has 0 height?
+   - I'll use `min-height: 240px` for `.notesListScroll` on mobile and `max-height: min(50vh, 400px)` 
+   - Ensure `.notesToolbar` stacks vertically with `width: 100%` on children
+
+4. **Enter key**: Add for:
+   - dailyTaskInput -> btnAddDailyTask
+   - tagInput -> already has Enter for addTagsFromInput, verify
+   - noteTitle -> maybe save editor on Enter? careful with newlines
+   - plan fields: planSubject, planTotalHours, etc. - could trigger generate on Enter for some
+   - auth sign up? 
+   - Search notes - Enter could focus list
+   - I'll grep app.js for getElementById inputs
+
+Let me read blank input section (duplicate) and select--small
+</details></think>
+
+---
+
+
+
+
+
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="ripgrep_raw_search">
+<details>
+<summary>Tool use: **ripgrep_raw_search**</summary>
+
+
+Parameters:
+
+```json
+{
+  "pattern": "\\.blank",
+  "path": "d:\\CPA学习助手\\styles.css",
+  "outputMode": "content",
+  "caseInsensitive": false
+}
+```
+Additional data:
+
+```json
+{
+  "isPruned": true,
+  "pattern": "\\.blank",
+  "path": "d:\\CPA学习助手\\styles.css",
+  "outputMode": "content",
+  "totalFiles": 1,
+  "totalMatches": 8,
+  "topFiles": [
+    {
+      "uri": "styles.css",
+      "matchCount": 8
+    }
+  ]
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="ripgrep_raw_search">
+<details>
+<summary>Tool use: **ripgrep_raw_search**</summary>
+
+
+Parameters:
+
+```json
+{
+  "pattern": "getElementById\\(|addEventListener\\(\\\"keydown\\\"",
+  "path": "d:\\CPA学习助手\\app.js",
+  "glob": "*.js",
+  "caseInsensitive": false
+}
+```
+Additional data:
+
+```json
+{
+  "isPruned": true,
+  "pattern": "getElementById\\(|addEventListener\\(\\\"keydown\\\"",
+  "path": "d:\\CPA学习助手\\app.js",
+  "outputMode": "content",
+  "totalFiles": 1,
+  "totalMatches": 100,
+  "topFiles": [
+    {
+      "uri": "app.js",
+      "matchCount": 80
+    }
+  ]
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+
+I'll implement:
+
+1. **index.html** - Restructure notes toolbar:
+```html
+<div class="notesToolbar">
+  <div class="notesToolbar__row notesToolbar__row--search">
+    <input id="notesSearch" class="input notesSearchInput" />
+  </div>
+  <div class="notesToolbar__row notesToolbar__row--controls">
+    <div class="notesSortSegmented" role="group" aria-label="排序">
+      <button type="button" data-sort="asc" class="notesSortSegmented__btn is-active">数字升序</button>
+      <button type="button" data-sort="desc" class="notesSortSegmented__btn">数字降序</button>
+    </div>
+    <select id="notesFilter" class="select notesFilterSelect">...</select>
+  </div>
+</div>
+```
+
+If I use buttons for sort instead of select, I sync with state.ui.notesSortOrder and remove notesSortOrder select - OR keep select but hide on desktop and show segmented on mobile - actually user wanted beautified display - segmented control is more Apple.
+
+I'll replace `notesSortOrder` select with segmented buttons. Update app.js to read from buttons instead of select - or keep hidden select for a11y and sync - simpler: use two buttons with click handlers that set state and update active class.
+
+2. **CSS** - 
+- `.notesToolbar` flex column gap
+- `.notesSortSegmented` display flex, rounded pill container, inner buttons
+- `.notesFilterSelect` min-height 44px, font 15px, padding -webkit-appearance
+- `.notesListScroll` mobile: `max-height: min(52dvh, 420px); min-height: 220px;` `-webkit-overflow-scrolling: touch`
+
+3. **app.js** changes:
+- Remove notesSortOrderEl select, add segmented buttons handler
+- On init and migrate, sync button states from state.ui.notesSortOrder
+- In renderNotesList, update segmented UI active state
+
+Actually if I change HTML I need to remove `notesSortOrder` select and add buttons. Update JS:
+
+```javascript
+const notesSortButtons = [...document.querySelectorAll("[data-notes-sort]")];
+// or
+document.querySelectorAll(".notesSortSegmented__btn").forEach...
+```
+
+Let me read where notesSortOrderEl is used.
+</details></think>
+
+---
+
+
+
+
+
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="ripgrep_raw_search">
+<details>
+<summary>Tool use: **ripgrep_raw_search**</summary>
+
+
+Parameters:
+
+```json
+{
+  "pattern": "notesSortOrder",
+  "path": "d:\\CPA学习助手\\app.js",
+  "outputMode": "content",
+  "caseInsensitive": false
+}
+```
+Additional data:
+
+```json
+{
+  "isPruned": true,
+  "pattern": "notesSortOrder",
+  "path": "d:\\CPA学习助手\\app.js",
+  "outputMode": "content",
+  "totalFiles": 1,
+  "totalMatches": 7,
+  "topFiles": [
+    {
+      "uri": "app.js",
+      "matchCount": 7
+    }
+  ]
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+
+I'll:
+1. Replace select with segmented control in HTML
+2. Add CSS for notesToolbar, notesSortSegmented, notesFilterSelect
+3. Update app.js: notesSortButtons, function syncNotesSortSegmented(), replace notesSortOrderEl logic
+
+For filter select: use class `notesFilterSelect` with full width on mobile, min-width on desktop, font-size 15px, letter-spacing slightly negative for Apple feel.
+
+4. Blank input: 
+```css
+.review .blank input,
+.blank input {
+  padding: 0 4px;
+  line-height: 1.15;
+  height: 1.35em;
+  min-height: unset;
+  vertical-align: baseline;
+  box-sizing: content-box;
+}
+```
+
+Actually user said keep left/right - they have padding 0 4px. Top/bottom should be 0. Line-height 1.2 to match review body 1.4 - maybe use 1.25em height.
+
+5. Enter handlers:
+- dailyTaskInput + btnAddDailyTask - read where btnAddDailyTask is
+- authSignUp - password Enter triggers sign up
+- noteTitle Enter -> saveEditor()
+- planSubject, planTotalHours, planDueDate, planDailyHours - Enter on last could trigger btnGeneratePlan click - or each field Enter triggers generate - simpler: add keydown on plan card inputs to trigger generate
+- pdf extract text - maybe not
+
+Let me read btnAddDailyTask and btnGeneratePlan sections
+</details></think>
+
+---
+
+
+
+
+
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="ripgrep_raw_search">
+<details>
+<summary>Tool use: **ripgrep_raw_search**</summary>
+
+
+Parameters:
+
+```json
+{
+  "pattern": "btnAddDailyTask|dailyTaskInput",
+  "path": "d:\\CPA学习助手\\app.js",
+  "outputMode": "content",
+  "caseInsensitive": false
+}
+```
+Additional data:
+
+```json
+{
+  "isPruned": true,
+  "pattern": "btnAddDailyTask|dailyTaskInput",
+  "path": "d:\\CPA学习助手\\app.js",
+  "outputMode": "content",
+  "totalFiles": 1,
+  "totalMatches": 4,
+  "topFiles": [
+    {
+      "uri": "app.js",
+      "matchCount": 4
+    }
+  ]
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="ripgrep_raw_search">
+<details>
+<summary>Tool use: **ripgrep_raw_search**</summary>
+
+
+Parameters:
+
+```json
+{
+  "pattern": "btnGeneratePlan|btnSignUp",
+  "path": "d:\\CPA学习助手\\app.js",
+  "outputMode": "content",
+  "caseInsensitive": false
+}
+```
+Additional data:
+
+```json
+{
+  "isPruned": true,
+  "pattern": "btnGeneratePlan|btnSignUp",
+  "path": "d:\\CPA学习助手\\app.js",
+  "outputMode": "content",
+  "totalFiles": 1,
+  "totalMatches": 4,
+  "topFiles": [
+    {
+      "uri": "app.js",
+      "matchCount": 4
+    }
+  ]
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+
+I'll add a helper or inline keydown for:
+- dailyTaskInputEl Enter -> same as btn click
+- authPassword on sign up flow - user might want Enter on sign up panel: if we use same password field, Enter triggers sign in. For sign up they click different button. Could add: Ctrl+Enter for sign up? Doc says "登录、提交". I'll add authPasswordEl second listener is tricky - maybe use keydown on password: if shift+enter sign up else enter sign in? Too complex. Simpler: document in account panel when email+password focused, Enter = sign in (already have). For sign up, user can add Enter on btnSignUp by focusing signup - actually add keydown on authPasswordEl with ctrl+enter for signup... 
+
+Better: use one handler on password:
+```
+if (e.key === 'Enter') {
+  e.preventDefault();
+  if (e.shiftKey) btnSignUpEl?.click();
+  else btnSignInEl?.click();
+}
+```
+Document in UI: "Enter 登录，Shift+Enter 注册"
+
+Or: Enter always signs in, and add Enter on sign up button focus - not possible.
+
+I'll do: Enter on password = sign in (existing). Add Enter on authEmail after tab - already both have sign in.
+
+For sign up: add hint "按住 Shift 并回车可快速注册" and implement shift+enter on password.
+
+- noteTitleEl Enter -> saveEditor(false)
+- plan inputs: wrap in form or add to each - btnGeneratePlan click
+
+- notesSearch Enter -> renderNotesList() (redundant) or blur
+
+Let me read btnAddDailyTask full block to extract function
+</details></think>
+
+---
+
+
+
+
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: d:\CPA学习助手\app.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: d:\CPA学习助手\app.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+
+I'll implement addDailyTask as a named function for reuse with Enter.
+
+For sw.js bump cache if we change index.html significantly - optional user.
+
+Intersection of `.review .blank input` - there's duplicate .review block - I'll add unified rules after both or use single consolidated rule at end.
+
+**HTML notes toolbar:**
+```html
+<div class="notesToolbar">
+  <div class="notesToolbar__search">
+    <input id="notesSearch" class="input notesToolbar__searchInput" placeholder="..." />
+  </div>
+  <div class="notesToolbar__filters">
+    <div class="notesSortSegmented" role="group" aria-label="笔记按标题数字排序">
+      <button type="button" class="notesSortSegmented__btn is-active" data-notes-sort="asc" id="btnNotesSortAsc">数字升序</button>
+      <button type="button" class="notesSortSegmented__btn" data-notes-sort="desc" id="btnNotesSortDesc">数字降序</button>
+    </div>
+    <div class="notesFilterWrap">
+      <label class="sr-only" for="notesFilter">筛选笔记</label>
+      <select id="notesFilter" class="select notesFilterSelect" aria-label="笔记筛选">
+        ...
+      </select>
+    </div>
+  </div>
+</div>
+```
+
+Add `.sr-only` for a11y.
+
+**syncNotesSortUI** in app:
+```javascript
+function syncNotesSortUI() {
+  const order = state.ui.notesSortOrder === "desc" ? "desc" : "asc";
+  document.querySelectorAll("[data-notes-sort]").forEach((btn) => {
+    btn.classList.toggle("is-active", btn.dataset.notesSort === order);
+  });
+}
+```
+Call from renderNotesList and on migrate boot - also after load state first render.
+
+Replace notesSortOrderEl with querySelectorAll for data-notes-sort click.
+
+**Mobile CSS:**
+```css
+.notesToolbar__filters {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+@media (min-width: 640px) {
+  .notesToolbar__filters {
+    flex-direction: row;
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+  .notesSortSegmented { flex: 0 0 auto; }
+  .notesFilterWrap { flex: 1; min-width: 200px; }
+}
+
+.notesToolbar__search {
+  width: 100%;
+  margin-bottom: 10px;
+}
+.notesToolbar__row - use search full width
+
+Actually current layout was row between search and controls - on mobile that squeezes. New structure: column always for toolbar inner, on large screens row for filters side by side.
+
+.notesListScroll:
+- min-height: 220px;
+- max-height: min(52vh, 380px);
+@media (min-width: 960px) {
+  .notesListScroll { max-height: 380px; }
+}
+- -webkit-overflow-scrolling: touch;
+- overflow-y: auto;
+- overscroll-behavior: contain;
+
+**Blank input** - use 
+```css
+.review .blank input,
+#reviewBody .blank input {
+  padding: 0 4px !important; /* keep horizontal */
+  margin: 0;
+  line-height: 1.2;
+  height: auto;
+  min-height: 0;
+  max-height: 1.4em;
+  vertical-align: middle;
+  box-sizing: border-box;
+}
+```
+Actually max-height 1.4em might clip text - use line-height 1.2 and font-size inherit from review (14px) -> ~17px total. iOS inputs have min-height issues - add appearance: none.
+
+```css
+.blank input {
+  -webkit-appearance: none;
+  appearance: none;
+  padding: 0 4px;
+  line-height: 1.2;
+  height: 1.25em;
+  min-height: 1.25em;
+}
+```
+
+**Enter handlers:**
+1. Refactor add daily task:
+```javascript
+function addDailyTaskFromInput() {
+  const iso = todayISO();
+  const text = (dailyTaskInputEl.value ?? "").trim();
+  ...
+}
+document.getElementById("btnAddDailyTask")?.addEventListener("click", addDailyTaskFromInput);
+dailyTaskInputEl?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addDailyTaskFromInput(); }});
+```
+
+2. noteTitleEl keydown Enter -> saveEditor(false) when active note
+
+3. plan fields - get btnGeneratePlan element reference and click on Enter from planSubjectEl, planTotalHoursEl, planDueDateEl, planDailyHoursEl
+
+4. authPassword: change to if Enter && shift then signUp else signIn - and update auth email handlers similarly OR single handler on password:
+```javascript
+function onAuthPasswordKeydown(e) {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  if (e.shiftKey) btnSignUpEl?.click();
+  else btnSignInEl?.click();
+}
+```
+Remove duplicate from email tha</details></think>
+
+---
+

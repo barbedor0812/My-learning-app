@@ -501,6 +501,7 @@ function createInitialState() {
       activeNoteId: null,
       activeFolderId: "all",
       activePlanId: null,
+      notesSortOrder: "asc",
       calendarYM: null, // "YYYY-MM"
       expandedFolderIds: [],
       editorShowClozeHighlight: true,
@@ -562,6 +563,7 @@ function migrateState(s) {
   out.notes = out.notes.map((n) => ({ ...n, folderId: n?.folderId ?? null, isTodayTarget: !!n?.isTodayTarget }));
 
   out.ui.activeFolderId = out.ui.activeFolderId ?? "all";
+  out.ui.notesSortOrder = out.ui.notesSortOrder === "desc" ? "desc" : "asc";
   out.ui.calendarYM = out.ui.calendarYM ?? todayISO().slice(0, 7);
   out.ui.expandedFolderIds = Array.isArray(out.ui.expandedFolderIds) ? out.ui.expandedFolderIds : [];
 
@@ -574,6 +576,8 @@ let state = loadState();
 // Notes multi-select (UI-only, not persisted)
 let notesSelectionMode = false;
 let selectedNoteIds = new Set();
+let renamingNoteId = null;
+let renamingDraftTitle = "";
 let openMovePanelNoteId = null;
 let movePanelDraft = { targetType: "folder", folderId: null, newFolderName: "" };
 
@@ -775,6 +779,14 @@ if (btnSignInEl) {
     if (error) authMsgEl.textContent = `登录失败：${error.message}`;
   });
 }
+function onAuthFormKeydown(e) {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  if (e.shiftKey) btnSignUpEl?.click();
+  else btnSignInEl?.click();
+}
+authEmailEl?.addEventListener("keydown", onAuthFormKeydown);
+authPasswordEl?.addEventListener("keydown", onAuthFormKeydown);
 
 if (btnSignUpEl) {
   btnSignUpEl.addEventListener("click", async () => {
@@ -1251,6 +1263,12 @@ noteTitleEl.addEventListener("input", () => {
   scheduleAutoSave();
   renderNotePreview({ ...note, title: noteTitleEl.value, tags: parseTags(noteTagsEl.value), body: noteBodyEl.value });
 });
+noteTitleEl.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  if (!state.ui.activeNoteId) return;
+  saveEditor(false);
+});
 noteTagsEl.addEventListener("input", () => {
   const note = getNoteById(state.ui.activeNoteId);
   if (!note) return;
@@ -1477,6 +1495,48 @@ function isNoteDueToday(noteId) {
   return state.reviewTasks.some((t) => t.noteId === noteId && t.dueDate === iso && !t.completedAt);
 }
 
+function extractFirstNumber(title) {
+  const m = String(title ?? "").match(/\d+/);
+  return m ? Number(m[0]) : null;
+}
+
+function compareByNumericTitle(a, b, order = "asc") {
+  const n1 = extractFirstNumber(a.title);
+  const n2 = extractFirstNumber(b.title);
+  const factor = order === "desc" ? -1 : 1;
+  const has1 = Number.isFinite(n1);
+  const has2 = Number.isFinite(n2);
+  if (has1 && has2 && n1 !== n2) return (n1 - n2) * factor;
+  if (has1 && !has2) return -1;
+  if (!has1 && has2) return 1;
+  const t1 = String(a.title ?? "");
+  const t2 = String(b.title ?? "");
+  const byText = t1.localeCompare(t2, "zh");
+  if (byText !== 0) return byText * factor;
+  return (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "");
+}
+
+function getUniqueNoteTitle(baseTitle, excludeId = null) {
+  const base = String(baseTitle ?? "").trim() || "未命名笔记";
+  let candidate = base;
+  let i = 1;
+  const hasConflict = (name) =>
+    state.notes.some((n) => n.id !== excludeId && String(n.title ?? "").trim() === name);
+  while (hasConflict(candidate)) {
+    candidate = `${base}(${i})`;
+    i += 1;
+  }
+  return candidate;
+}
+
+/** 与 Apple 风格分段按钮同步当前排序状态 */
+function syncNotesSortSegmented() {
+  const order = state.ui.notesSortOrder === "desc" ? "desc" : "asc";
+  document.querySelectorAll("[data-notes-sort]").forEach((btn) => {
+    btn.classList.toggle("is-active", btn.dataset.notesSort === order);
+  });
+}
+
 function bulkMoveNotes() {
   const ids = [...selectedNoteIds];
   if (ids.length === 0) return alert("请先选择要移动的笔记");
@@ -1499,7 +1559,8 @@ btnBulkMoveNotesEl?.addEventListener("click", bulkMoveNotes);
 function renderNotesList() {
   const q = (notesSearchEl.value ?? "").trim().toLowerCase();
   const filter = notesFilterEl.value;
-  const iso = todayISO();
+  const sortOrder = state.ui.notesSortOrder === "desc" ? "desc" : "asc";
+  syncNotesSortSegmented();
   const folder = getActiveFolderId();
 
   const list = state.notes
@@ -1524,7 +1585,7 @@ function renderNotesList() {
       if (filter === "todayTarget") return !!n.isTodayTarget;
       return true;
     })
-    .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
+    .sort((a, b) => compareByNumericTitle(a, b, sortOrder));
 
   if (list.length === 0) {
     notesListEl.innerHTML = `<div class="muted centered-text" style="padding: 40px 20px;">无笔记</div>`;
@@ -1537,6 +1598,7 @@ function renderNotesList() {
       const learned = !!n.learnedAt;
       const selected = selectedNoteIds.has(n.id);
       const cls = `list__item ${selected ? "is-selected" : ""}`;
+      const isRenaming = renamingNoteId === n.id;
 
       const checkboxHtml = notesSelectionMode
         ? `
@@ -1550,8 +1612,10 @@ function renderNotesList() {
       <div class="${cls}" data-id="${n.id}">
         <div class="list__item-main">
           ${checkboxHtml}
-          <div class="list__item-content" data-action="openNote" data-id="${n.id}">
-            <div class="list__item-title">${escapeHtml(n.title)}</div>
+          <div class="list__item-content" ${isRenaming ? "" : `data-action="openNote" data-id="${n.id}"`}>
+            <div class="list__item-title">
+              ${isRenaming ? `<input class="input noteRenameInput" data-action="renameInput" data-id="${n.id}" value="${escapeHtml(renamingDraftTitle || n.title)}" />` : `${escapeHtml(n.title)}`}
+            </div>
             <div class="list__item-meta">
               ${isDue ? `<span class="chip chip--due">需复习</span>` : ""}
               ${learned ? `<span class="chip chip--learned">已学</span>` : ""}
@@ -1559,8 +1623,12 @@ function renderNotesList() {
           </div>
         </div>
         <div class="list__item-actions">
-          <button class="btn--secondary btn--small" data-action="reviewNote" data-id="${n.id}">复习</button>
-          <button class="btn btn--small" data-action="openNote" data-id="${n.id}">编辑</button>
+          ${isRenaming
+            ? `<button class="btn btn--small" data-action="saveRename" data-id="${n.id}" title="保存">✓</button>
+               <button class="btn btn--ghost btn--small" data-action="cancelRename" data-id="${n.id}" title="取消">✕</button>`
+            : `<button class="btn btn--ghost btn--small" data-action="startRename" data-id="${n.id}" title="重命名">✎</button>
+               <button class="btn--secondary btn--small" data-action="reviewNote" data-id="${n.id}">复习</button>
+               <button class="btn btn--small" data-action="openNote" data-id="${n.id}">编辑</button>`}
         </div>
       </div>
     `;
@@ -1572,6 +1640,70 @@ function renderNotesList() {
   });
   notesListEl.querySelectorAll("[data-action='reviewNote']").forEach((el) => {
     el.addEventListener("click", () => openReview(el.dataset.id));
+  });
+  notesListEl.querySelectorAll("[data-action='startRename']").forEach((el) => {
+    el.addEventListener("click", () => {
+      const id = el.dataset.id;
+      const note = getNoteById(id);
+      if (!note) return;
+      renamingNoteId = id;
+      renamingDraftTitle = note.title ?? "";
+      renderNotesList();
+      const input = notesListEl.querySelector(`[data-action='renameInput'][data-id='${id}']`);
+      if (input) {
+        input.focus();
+        input.select();
+      }
+    });
+  });
+  notesListEl.querySelectorAll("[data-action='renameInput']").forEach((el) => {
+    el.addEventListener("input", () => {
+      renamingDraftTitle = el.value ?? "";
+    });
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const id = el.dataset.id;
+        const note = getNoteById(id);
+        if (!note) return;
+        const nextTitle = String(renamingDraftTitle ?? "").trim();
+        if (!nextTitle) return alert("名称不能为空");
+        note.title = getUniqueNoteTitle(nextTitle, note.id);
+        note.updatedAt = new Date().toISOString();
+        upsertNote(note);
+        renamingNoteId = null;
+        renamingDraftTitle = "";
+        scheduleSave();
+        renderNotesList();
+      } else if (e.key === "Escape") {
+        renamingNoteId = null;
+        renamingDraftTitle = "";
+        renderNotesList();
+      }
+    });
+  });
+  notesListEl.querySelectorAll("[data-action='saveRename']").forEach((el) => {
+    el.addEventListener("click", () => {
+      const id = el.dataset.id;
+      const note = getNoteById(id);
+      if (!note) return;
+      const nextTitle = String(renamingDraftTitle ?? "").trim();
+      if (!nextTitle) return alert("名称不能为空");
+      note.title = getUniqueNoteTitle(nextTitle, note.id);
+      note.updatedAt = new Date().toISOString();
+      upsertNote(note);
+      renamingNoteId = null;
+      renamingDraftTitle = "";
+      scheduleSave();
+      renderNotesList();
+    });
+  });
+  notesListEl.querySelectorAll("[data-action='cancelRename']").forEach((el) => {
+    el.addEventListener("click", () => {
+      renamingNoteId = null;
+      renamingDraftTitle = "";
+      renderNotesList();
+    });
   });
   notesListEl.querySelectorAll("[data-action='selectNote']").forEach((el) => {
     el.addEventListener("change", (e) => {
@@ -1623,7 +1755,23 @@ function deleteSelectedNotes() {
 }
 
 notesSearchEl.addEventListener("input", renderNotesList);
+notesSearchEl.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    renderNotesList();
+    notesSearchEl.blur();
+  }
+});
 notesFilterEl.addEventListener("change", renderNotesList);
+document.querySelectorAll("[data-notes-sort]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    state.ui.notesSortOrder = btn.dataset.notesSort === "desc" ? "desc" : "asc";
+    syncNotesSortSegmented();
+    scheduleSave();
+    renderNotesList();
+  });
+});
+syncNotesSortSegmented();
 
 btnToggleSelectNotesEl.addEventListener("click", () => {
   notesSelectionMode = !notesSelectionMode;
@@ -1831,6 +1979,7 @@ const pdfRulesFormEl = document.getElementById("pdfRulesForm");
 const btnAddPdfRuleEl = document.getElementById("btnAddPdfRule");
 
 let pdfRulesDraft = []; // [{id, from, to, targetType: 'folder'|'uncategorized'|'new', folderId, newFolderName}]
+let currentPdfBaseName = "从PDF导入";
 
 function renderPdfRulesForm() {
   if (!pdfRulesFormEl) return;
@@ -1912,6 +2061,10 @@ function renderPdfRulesForm() {
 pdfInputEl.addEventListener("change", async (e) => {
   const file = e.target.files?.[0];
   if (!file) return;
+  currentPdfBaseName =
+    String(file.name ?? "")
+      .replace(/\.[^.]+$/, "")
+      .trim() || "从PDF导入";
   if (!pdfjsLib?.getDocument) {
     pdfImportStatusEl.textContent =
       "解析失败：PDF 解析组件未加载。请确认同目录下存在 pdf.min.js 与 pdf.worker.min.js，然后刷新页面重试。";
@@ -2063,14 +2216,15 @@ document.getElementById("btnCreateNotesFromPdf")?.addEventListener("click", () =
   const now = new Date().toISOString();
   let createdCount = 0;
 
-  for (const c of chunks) {
+  for (let idx = 0; idx < chunks.length; idx++) {
+    const c = chunks[idx];
     const pageNo = inferPdfPageNo(c);
     const folderId = pickFolderIdForPageNo(pageNo, rules);
     
     if (folderId === undefined) continue; // Skip if no rule matches
 
-    const firstLine = c.split(/\r?\n/).find((l) => l.trim()) ?? "从PDF导入";
-    const title = firstLine.replace(/^#+\s*/, "").slice(0, 40) || "从PDF导入";
+    const pageLabel = Number.isFinite(pageNo) ? pageNo : idx + 1;
+    const title = getUniqueNoteTitle(`${currentPdfBaseName}_第${pageLabel}页`);
 
     upsertNote({
       id: uid("note"),
@@ -2271,7 +2425,7 @@ document.getElementById("btnAddSpecialRule")?.addEventListener("click", () => {
   renderToday();
 });
 
-document.getElementById("btnGeneratePlan")?.addEventListener("click", () => {
+function runGeneratePlanFromForm() {
   const p = getActivePlan();
   if (!p) return;
   p.subject = (planSubjectEl.value ?? "").trim() || p.subject;
@@ -2294,7 +2448,18 @@ document.getElementById("btnGeneratePlan")?.addEventListener("click", () => {
   renderPlanPreview();
   renderToday();
   renderStats();
-});
+}
+
+document.getElementById("btnGeneratePlan")?.addEventListener("click", runGeneratePlanFromForm);
+function onPlanFieldEnter(e) {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  runGeneratePlanFromForm();
+}
+planSubjectEl?.addEventListener("keydown", onPlanFieldEnter);
+planTotalHoursEl?.addEventListener("keydown", onPlanFieldEnter);
+planDueDateEl?.addEventListener("keydown", onPlanFieldEnter);
+planDailyHoursEl?.addEventListener("keydown", onPlanFieldEnter);
 
 function generatePlan({ fromISO, toISO, totalHours, dailyHours, specialRules }) {
   if (!toISO) return null;
@@ -2411,6 +2576,8 @@ btnDeletePlanSubjectEl.addEventListener("click", () => {
 // ---------------- Today ----------------
 const todayHintEl = document.getElementById("todayHint");
 const todayStudyTargetEl = document.getElementById("todayStudyTarget");
+const todayLearnedHoursEl = document.getElementById("todayLearnedHours");
+const todaySubjectBreakdownEl = document.getElementById("todaySubjectBreakdown");
 const todayStudyListEl = document.getElementById("todayStudyList");
 const todayReviewListEl = document.getElementById("todayReviewList");
 const todayMoodSavedEl = document.getElementById("todayMoodSaved");
@@ -2430,7 +2597,7 @@ document.querySelectorAll(".segmented__btn").forEach((b) => {
   });
 });
 
-document.getElementById("btnAddDailyTask")?.addEventListener("click", () => {
+function addDailyTaskFromInput() {
   const iso = todayISO();
   const text = (dailyTaskInputEl.value ?? "").trim();
   if (!text) return;
@@ -2441,6 +2608,14 @@ document.getElementById("btnAddDailyTask")?.addEventListener("click", () => {
   scheduleSave();
   renderToday();
   renderStats();
+}
+
+document.getElementById("btnAddDailyTask")?.addEventListener("click", addDailyTaskFromInput);
+dailyTaskInputEl?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    addDailyTaskFromInput();
+  }
 });
 
 function getDayTasks(iso) {
@@ -2499,17 +2674,19 @@ document.getElementById("btnStartStudyTimer")?.addEventListener("click", () => {
     studyTimer.running = true;
     studyTimer.startedAt = Date.now();
     studyTimer.noteId = null;
-    document.getElementById("btnStartStudyTimer").textContent = "停止并记录";
+    document.getElementById("btnStartStudyTimer").textContent = "结束计时";
     startStudyTick();
     return;
   }
   const ms = Date.now() - (studyTimer.startedAt ?? Date.now());
-  const hours = ms / 1000 / 60 / 60;
-  state.studyLog.push({ id: uid("st"), iso: todayISO(), hours, at: new Date().toISOString() });
+  if (ms >= 60000) {
+    const hours = ms / 1000 / 60 / 60;
+    state.studyLog.push({ id: uid("st"), iso: todayISO(), hours, at: new Date().toISOString() });
+    scheduleSave();
+  }
   stopStudyTick();
   studyTimer = { running: false, startedAt: null, noteId: null, tickId: null };
   document.getElementById("btnStartStudyTimer").textContent = "开始计时";
-  scheduleSave();
   renderToday();
   renderStats();
 });
@@ -2527,6 +2704,33 @@ function renderToday() {
     : "按计划推进，先做新学，再做复习。";
 
   todayStudyTargetEl.textContent = plannedHours > 0 ? `今日新学目标：${formatHours(plannedHours)}` : "今日新学目标：—";
+  const todayLearned = (state.studyLog ?? [])
+    .filter((x) => x.iso === iso)
+    .reduce((sum, x) => sum + (Number(x.hours) || 0), 0);
+  if (todayLearnedHoursEl) {
+    todayLearnedHoursEl.textContent = `今日已学：${todayLearned.toFixed(1)} 小时`;
+  }
+  if (todaySubjectBreakdownEl) {
+    const rows = (state.plans ?? [])
+      .map((p) => ({
+        subject: p.subject || "未命名科目",
+        h: Number(p.generated?.allocations?.find((a) => a.iso === iso)?.plannedHours ?? 0),
+      }))
+      .filter((x) => x.h > 0);
+    if (rows.length === 0) {
+      todaySubjectBreakdownEl.innerHTML = `<div class="muted">今日暂无科目目标明细</div>`;
+    } else {
+      const total = rows.reduce((s, x) => s + x.h, 0);
+      todaySubjectBreakdownEl.innerHTML =
+        rows
+          .map(
+            (r) =>
+              `<div class="item item--compact"><div class="row row--between"><div>${escapeHtml(r.subject)}</div><div>${r.h.toFixed(1)}h</div></div></div>`,
+          )
+          .join("") +
+        `<div class="item item--compact"><div class="row row--between"><strong>总计</strong><strong>${total.toFixed(1)}h</strong></div></div>`;
+    }
+  }
 
   const dueTasks = state.reviewTasks.filter((t) => t.dueDate === iso && !t.completedAt);
   if (dueTasks.length === 0) todayReviewListEl.innerHTML = `<div class="muted">今天没有到期复习任务。</div>`;
