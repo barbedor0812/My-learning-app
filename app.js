@@ -595,7 +595,15 @@ function scheduleSave() {
   savingTimer = setTimeout(async () => {
     savingTimer = null;
     await flushCloudSave();
-  }, 1000);
+  }, 350);
+}
+
+/** 关键数据（如文件夹结构/移动归类）立即上云，减少等待 */
+function scheduleSaveNow() {
+  if (suppressPersistenceUntilLogin) return;
+  touchCloudMeta();
+  saveState();
+  flushCloudSave().catch((e) => recordCloudError(e));
 }
 
 /** 仅写本地：路由/展开/当前页等 UI，不触发云端写入 */
@@ -695,10 +703,8 @@ function migrateState(s) {
   };
   out.ui.activePlanId = out.ui.activePlanId ?? out.plans[0]?.id ?? null;
 
-  // folders (v2) - Initial folders removed as requested
+  // folders
   out.folders = Array.isArray(out.folders) ? out.folders : [];
-  // Cleanup old default folders if they exist
-  out.folders = out.folders.filter(f => !["第一章", "第二章"].includes(f.name));
 
   // Ensure note.folderId exists
   out.notes = Array.isArray(out.notes) ? out.notes : [];
@@ -1461,7 +1467,7 @@ noteFolderSelectEl?.addEventListener("change", () => {
   note.folderId = noteFolderSelectEl.value || null;
   note.updatedAt = new Date().toISOString();
   upsertNote(note);
-  scheduleSave();
+  scheduleSaveNow();
   renderNotes();
   renderNoteFolderSelect(note);
 });
@@ -1718,7 +1724,7 @@ function bulkMoveNotes() {
     const note = getNoteById(id);
     if (note) note.folderId = targetFolderId === "uncategorized" ? null : targetFolderId;
   }
-  scheduleSave();
+  scheduleSaveNow();
   notesSelectionMode = false;
   selectedNoteIds = new Set();
   renderAll();
@@ -1996,7 +2002,7 @@ btnAddFolderEl.addEventListener("click", () => {
   state.folders.push({ id, name, parentId, createdAt: new Date().toISOString() });
   // auto-expand parent so new child is visible
   if (parentId) setFolderExpanded(parentId, true);
-  scheduleSave();
+  scheduleSaveNow();
   renderNotes();
 });
 
@@ -2026,7 +2032,7 @@ btnDeleteFolderEl.addEventListener("click", () => {
   // cleanup expanded state
   state.ui.expandedFolderIds = (state.ui.expandedFolderIds ?? []).filter((id) => !toDelete.has(id));
   setActiveFolderId("all");
-  scheduleSave();
+  scheduleSaveNow();
   renderAll();
 });
 
