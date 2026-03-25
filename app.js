@@ -168,15 +168,96 @@ async function saveToCloud(userId) {
   if (error) throw error;
 }
 
+/** 可选表：见项目根目录 `supabase_option_tables.sql`；未建表时静默跳过 */
+const STUDY_SESSIONS_TABLE = "study_sessions";
+
+function isMissingStudySessionsTableError(err) {
+  const msg = String(err?.message ?? err ?? "");
+  const c = String(err?.code ?? "");
+  return c === "PGRST205" || (msg.includes("study_sessions") && (msg.includes("schema cache") || msg.includes("Could not find")));
+}
+
+async function insertStudySessionRow(durationSeconds, sessionDateIso, localLogId) {
+  if (!currentUser?.id || durationSeconds < 1) return;
+  try {
+    await ensureAuthSessionFresh();
+    const row = {
+      user_id: currentUser.id,
+      duration_seconds: Math.round(durationSeconds),
+      session_date: sessionDateIso,
+      created_at: new Date().toISOString(),
+    };
+    const { data, error } = await supabaseClient.from(STUDY_SESSIONS_TABLE).insert(row).select("id").maybeSingle();
+    if (error) {
+      if (!isMissingStudySessionsTableError(error)) console.warn("study_sessions:", error.message);
+      return;
+    }
+    if (data?.id && localLogId) {
+      const e = state.studyLog?.find((s) => s.id === localLogId);
+      if (e) {
+        e.sessionRowId = data.id;
+        scheduleSave();
+      }
+    }
+  } catch (e) {
+    if (!isMissingStudySessionsTableError(e)) console.warn(e);
+  }
+}
+
+/** 登录后合并独立表中的计时记录，避免仅靠 app_state 时丢会话 */
+async function mergeStudySessionsFromTable(userId) {
+  if (!userId) return false;
+  let added = false;
+  try {
+    await ensureAuthSessionFresh();
+    const cutoff = addDaysISO(todayISO(), -120);
+    const { data, error } = await supabaseClient
+      .from(STUDY_SESSIONS_TABLE)
+      .select("id, duration_seconds, session_date, created_at")
+      .eq("user_id", userId)
+      .gte("session_date", cutoff);
+    if (error) {
+      if (!isMissingStudySessionsTableError(error)) throw error;
+      return false;
+    }
+    const rows = Array.isArray(data) ? data : [];
+    state.studyLog = Array.isArray(state.studyLog) ? state.studyLog : [];
+    for (const row of rows) {
+      const sid = row.id;
+      if (!sid) continue;
+      if (state.studyLog.some((s) => s.sessionRowId === sid)) continue;
+      const sec = Number(row.duration_seconds) || 0;
+      const hours = sec / 3600;
+      const iso = String(row.session_date || todayISO());
+      const approxDup = state.studyLog.some((s) => {
+        if (s.sessionRowId) return s.sessionRowId === sid;
+        return String(s.iso) === iso && Math.abs((Number(s.hours) || 0) - hours) < 0.0003;
+      });
+      if (approxDup) continue;
+      state.studyLog.push({
+        id: uid("st"),
+        iso,
+        hours,
+        at: row.created_at || new Date().toISOString(),
+        sessionRowId: sid,
+      });
+      added = true;
+    }
+    if (added) scheduleSave();
+  } catch (e) {
+    if (!isMissingStudySessionsTableError(e)) recordCloudError(e);
+  }
+  return added;
+}
+
 // --- Realtime sync (subscribe to app_state row changes) ---
 const dataSync = useDataSync({
   table: "app_state",
   onRemoteChange: (payload) => {
-    // Ignore self-writes; apply the same rules via syncFromCloudRaw.
     if (!currentUser?.id) return;
     if (document.visibilityState !== "visible") return;
-    // Debounce by queueing in existing cloudQueue
-    syncFromCloud();
+    // 先推后拉，避免轮询/实时用旧云端覆盖未上传的本地变更
+    syncData();
   },
   onError: (e) => recordCloudError(e),
 });
@@ -346,7 +427,8 @@ function shouldApplyRemote(remote) {
   const rRev = Number(rcm?.rev) || 0;
   const lRev = Number(lcm?.rev) || 0;
   const rBy = String(rcm?.updatedBy || "");
-  if (rBy && rBy === CLIENT_ID) return false;
+  // 同 CLIENT_ID 仅拒绝「本标签已对齐」的回声；多标签同机写入时云端仍是同一 CLIENT_ID，必须用 rev 判断以免永远不合并
+  if (rBy && rBy === CLIENT_ID && rRev <= lRev) return false;
   if (rRev > lRev) return true;
   const rAt = String(rcm?.updatedAt || "");
   const lAt = String(lcm?.updatedAt || "");
@@ -396,8 +478,8 @@ function syncFromCloud() {
 function syncData() {
   if (!currentUser?.id) return Promise.resolve();
   return enqueueCloudTask(async () => {
-    await syncFromCloudRaw();
     await flushCloudSaveRaw();
+    await syncFromCloudRaw();
   });
 }
 
@@ -631,6 +713,20 @@ function migrateState(s) {
   return out;
 }
 
+(function cleanupStaleCloudPending() {
+  try {
+    const raw = localStorage.getItem(CLOUD_PENDING_KEY);
+    if (!raw) return;
+    const diskRaw = localStorage.getItem(STORAGE_KEY);
+    if (!diskRaw) return;
+    const pending = migrateState(JSON.parse(raw));
+    const disk = migrateState(JSON.parse(diskRaw));
+    if (!isStateNewer(pending, disk)) localStorage.removeItem(CLOUD_PENDING_KEY);
+  } catch {
+    localStorage.removeItem(CLOUD_PENDING_KEY);
+  }
+})();
+
 let state = loadState();
 
 // Notes multi-select (UI-only, not persisted)
@@ -808,6 +904,10 @@ async function onAuthChanged(session) {
     state = createInitialState();
   }
   state = migrateState(state);
+  if (currentUser?.id) {
+    await mergeStudySessionsFromTable(currentUser.id);
+    await syncData().catch((e) => recordCloudError(e));
+  }
   {
     const r = state.ui.lastRoute ?? "today";
     for (const t of tabs) t.classList.toggle("is-active", t.dataset.route === r);
@@ -819,6 +919,13 @@ async function onAuthChanged(session) {
 
 const auth = useAuth((session) => onAuthChanged(session));
 auth.bind().catch((e) => console.error(e));
+
+window.addEventListener("pagehide", () => {
+  try {
+    if (suppressPersistenceUntilLogin || !currentUser?.id) return;
+    if (needsCloudPush()) saveState();
+  } catch {}
+});
 
 window.addEventListener("online", () => {
   if (currentUser?.id) {
@@ -2743,16 +2850,28 @@ document.getElementById("btnStartStudyTimer")?.addEventListener("click", () => {
     return;
   }
   const ms = Date.now() - (studyTimer.startedAt ?? Date.now());
-  if (ms >= 60000) {
-    const hours = ms / 1000 / 60 / 60;
-    state.studyLog.push({ id: uid("st"), iso: todayISO(), hours, at: new Date().toISOString() });
-    scheduleSave();
-  }
   stopStudyTick();
   studyTimer = { running: false, startedAt: null, noteId: null, tickId: null };
   document.getElementById("btnStartStudyTimer").textContent = "开始计时";
-  renderToday();
-  renderStats();
+
+  (async () => {
+    if (ms >= 60000) {
+      const hours = ms / 1000 / 60 / 60;
+      const iso = todayISO();
+      const entry = { id: uid("st"), iso, hours, at: new Date().toISOString() };
+      state.studyLog.push(entry);
+      touchCloudMeta();
+      saveState();
+      try {
+        await enqueueCloudTask(() => flushCloudSaveRaw());
+      } catch (e) {
+        recordCloudError(e);
+      }
+      await insertStudySessionRow(Math.round(ms / 1000), iso, entry.id);
+    }
+    renderToday();
+    renderStats();
+  })();
 });
 
 function renderToday() {
